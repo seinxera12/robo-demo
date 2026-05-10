@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 class KokoroTTS:
     """English TTS using Kokoro KPipeline(lang_code='a')."""
 
+    # Default English voice — can be overridden if needed
+    DEFAULT_VOICE = "af_heart"
+
     def __init__(self) -> None:
         self._pipeline: Optional[object] = None
 
@@ -35,7 +38,7 @@ class KokoroTTS:
         """Synchronous synthesis — runs in a thread executor."""
         pipeline = self._get_pipeline()
         audio_chunks = []
-        for _, _, audio in pipeline(text):
+        for _, _, audio in pipeline(text, voice=self.DEFAULT_VOICE):
             audio_chunks.append(audio)
         if not audio_chunks:
             return b""
@@ -54,6 +57,8 @@ class KokoroTTS:
 class KokoroJapaneseTTS:
     """Japanese TTS using Kokoro KPipeline(lang_code='j')."""
 
+    DEFAULT_VOICE = "jf_alpha"
+
     def __init__(self) -> None:
         self._pipeline: Optional[object] = None
 
@@ -70,7 +75,7 @@ class KokoroJapaneseTTS:
         """Synchronous synthesis — runs in a thread executor."""
         pipeline = self._get_pipeline()
         audio_chunks = []
-        for _, _, audio in pipeline(text):
+        for _, _, audio in pipeline(text, voice=self.DEFAULT_VOICE):
             audio_chunks.append(audio)
         if not audio_chunks:
             return b""

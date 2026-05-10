@@ -61,6 +61,12 @@ async def main() -> None:
     server_url = f"ws://localhost:{ws_port}/ws"
     logger.info("AudioClient connecting to %s", server_url)
 
+    # Capture the running event loop NOW (on the main asyncio thread).
+    # The sounddevice audio callback runs on a C audio thread where
+    # asyncio.get_event_loop() raises RuntimeError, so we pass the loop
+    # explicitly to all thread-boundary callbacks.
+    loop = asyncio.get_event_loop()
+
     # ------------------------------------------------------------------
     # 2. Instantiate components (forward-declare to allow cross-references)
     # ------------------------------------------------------------------
@@ -73,8 +79,8 @@ async def main() -> None:
     # WSClient — WebSocket connection; callbacks wired below
     def _on_audio(wav_bytes: bytes) -> None:
         """Dispatch received WAV bytes to the playback queue."""
-        asyncio.get_event_loop().call_soon_threadsafe(
-            lambda: asyncio.ensure_future(audio_playback.enqueue(wav_bytes))
+        loop.call_soon_threadsafe(
+            lambda: asyncio.ensure_future(audio_playback.enqueue(wav_bytes), loop=loop)
         )
 
     def _on_status(state: str) -> None:
@@ -91,14 +97,14 @@ async def main() -> None:
     # SileroVAD — voice activity detection; callbacks wired below
     def _on_speech_end(pcm16_bytes: bytes) -> None:
         """Send accumulated PCM16 audio to the server when speech ends."""
-        asyncio.get_event_loop().call_soon_threadsafe(
-            lambda: asyncio.ensure_future(ws_client.send_audio(pcm16_bytes))
+        loop.call_soon_threadsafe(
+            lambda: asyncio.ensure_future(ws_client.send_audio(pcm16_bytes), loop=loop)
         )
 
     def _on_barge_in() -> None:
         """Interrupt server playback and stop local audio on barge-in."""
-        asyncio.get_event_loop().call_soon_threadsafe(
-            lambda: asyncio.ensure_future(ws_client.send_interrupt())
+        loop.call_soon_threadsafe(
+            lambda: asyncio.ensure_future(ws_client.send_interrupt(), loop=loop)
         )
         audio_playback.stop()
 

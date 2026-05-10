@@ -187,17 +187,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Lightweight Voice Demo", lifespan=lifespan)
 
-# Mount pre-built React UI static files at the HTTP root.
-# Wrapped in try/except so the server starts even when ui/dist/ doesn't exist yet.
-try:
-    app.mount("/", StaticFiles(directory="ui/dist", html=True), name="static")
-except RuntimeError:
-    logger.warning("ui/dist/ not found — static file serving disabled")
-
 
 # ---------------------------------------------------------------------------
 # WebSocket endpoint: /ws  (AudioClient)
 # ---------------------------------------------------------------------------
+# NOTE: WebSocket routes MUST be registered before the static files mount.
+# The catch-all StaticFiles mount at "/" would otherwise intercept WebSocket
+# upgrade requests and raise an AssertionError (scope["type"] == "http").
 
 
 @app.websocket("/ws")
@@ -361,3 +357,13 @@ async def ws_browser_ui(websocket: WebSocket):
     finally:
         ui_clients.discard(websocket)
         logger.info("BrowserUI disconnected — ui_session_id=%s", ui_session_id)
+
+
+# ---------------------------------------------------------------------------
+# Static files — mounted LAST so the catch-all "/" does not intercept
+# WebSocket upgrade requests handled by the routes above.
+# ---------------------------------------------------------------------------
+try:
+    app.mount("/", StaticFiles(directory="ui/dist", html=True), name="static")
+except RuntimeError:
+    logger.warning("ui/dist/ not found — static file serving disabled")
