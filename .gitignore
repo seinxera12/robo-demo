@@ -1,0 +1,32 @@
+# Environment
+.env
+
+# Python virtual environment
+venv/
+.kiro/
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Torch / model cache (auto-downloaded at runtime)
+~/.cache/torch/
+~/.cache/huggingface/
+
+# Node / UI dev dependencies (ui/dist/ is committed pre-built)
+ui/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
