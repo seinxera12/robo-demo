@@ -44,6 +44,7 @@ class WSClient:
         self._on_audio = on_audio
         self._on_status = on_status
         self._ws = None  # active websockets connection
+        self._running: bool = True  # set to False to stop the run() loop
 
     # ------------------------------------------------------------------
     # Public API
@@ -89,7 +90,8 @@ class WSClient:
             pcm16_bytes: Raw PCM16 audio bytes captured from the microphone.
         """
         if self._ws is None:
-            logger.warning("WSClient.send_audio called but not connected; dropping frame.")
+            if self._running:
+                logger.warning("WSClient.send_audio called but not connected; dropping frame.")
             return
         try:
             await self._ws.send(pcm16_bytes)
@@ -99,7 +101,8 @@ class WSClient:
     async def send_interrupt(self) -> None:
         """Send a JSON interrupt control message to the server."""
         if self._ws is None:
-            logger.warning("WSClient.send_interrupt called but not connected; dropping.")
+            if self._running:
+                logger.warning("WSClient.send_interrupt called but not connected; dropping.")
             return
         try:
             await self._ws.send(json.dumps({"type": "interrupt"}))
@@ -111,9 +114,9 @@ class WSClient:
         """Main receive loop — connects and dispatches incoming frames.
 
         Reconnects with exponential backoff on disconnect. Stops after
-        exhausting all reconnect attempts.
+        exhausting all reconnect attempts or when ``close()`` is called.
         """
-        while True:
+        while self._running:
             try:
                 await self.connect()
                 await self._receive_loop()
@@ -121,9 +124,24 @@ class WSClient:
                 # All reconnect attempts exhausted inside connect()
                 logger.error("WSClient giving up: %s", exc)
                 return
+            except asyncio.CancelledError:
+                logger.info("WSClient.run() cancelled.")
+                return
             except Exception as exc:
                 logger.warning("WSClient disconnected unexpectedly: %s", exc)
                 # connect() will handle the backoff on the next iteration
+
+    async def close(self) -> None:
+        """Stop the run loop and close the active WebSocket connection."""
+        self._running = False
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            finally:
+                self._ws = None
+        logger.info("WSClient closed.")
 
     # ------------------------------------------------------------------
     # Internal helpers

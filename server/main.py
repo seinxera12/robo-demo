@@ -30,6 +30,7 @@ from server.llm.gemini_llm import GeminiLLMBackend
 from server.llm.groq_llm import GroqLLMBackend
 from server.llm.intent import IntentClassifier
 from server.llm.prompt_builder import PromptBuilder
+from server.log import pipeline_event, pipeline_warn
 from server.models import TranscriptionResult
 from server.pipeline import PipelineState, VoicePipeline
 from server.search.tavily_search import TavilySearchClient
@@ -67,7 +68,10 @@ async def broadcast_to_ui(message: dict) -> None:
             await ws.send_text(text)
         except Exception:
             disconnected.add(ws)
-    ui_clients -= disconnected
+    # Use difference_update (in-place) instead of -= to avoid Python treating
+    # ui_clients as a local variable due to the assignment, which would raise
+    # UnboundLocalError: cannot access local variable 'ui_clients'.
+    ui_clients.difference_update(disconnected)
 
 
 # ---------------------------------------------------------------------------
@@ -171,11 +175,16 @@ async def lifespan(app: FastAPI):
 
     # 6. Signal readiness
     logger.info("✅ Server ready. Accepting connections.")
+    pipeline_event("SERVER", "ready",
+                   port=config.server_port,
+                   stt_model=config.groq_stt_model,
+                   llm_model=config.groq_llm_model)
 
     yield
 
     # Shutdown: cancel all active pipelines
     logger.info("Server shutting down — cancelling %d active pipeline(s).", len(active_pipelines))
+    pipeline_event("SERVER", "shutdown", active_sessions=len(active_pipelines))
     for pipeline in list(active_pipelines.values()):
         pipeline.stop()
     active_pipelines.clear()
@@ -214,6 +223,7 @@ async def ws_audio_client(websocket: WebSocket):
 
     session_id = str(uuid.uuid4())
     logger.info("AudioClient connected — session_id=%s", session_id)
+    pipeline_event("WS", "audio_client_connected", session=session_id[:8])
 
     # Create a fresh PipelineState for this connection (Requirement 3.4, 9.5)
     state = PipelineState(
@@ -324,6 +334,7 @@ async def ws_browser_ui(websocket: WebSocket):
                     continue
 
                 logger.debug("BrowserUI text_input: %r", text)
+                pipeline_event("WS", "text_input_received", text=text[:80])
 
                 if active_pipelines:
                     # Get the most recently added pipeline (last key in insertion-ordered dict)
@@ -353,6 +364,18 @@ async def ws_browser_ui(websocket: WebSocket):
                     await broadcast_to_ui(
                         {"type": "transcript", "text": text, "language": "en"}
                     )
+
+            elif msg_type == "set_active":
+                # UI button toggled — activate or deactivate Robo for the active pipeline
+                active = bool(msg.get("active", False))
+                pipeline_event("WS", "set_active_received", active=active)
+                if active_pipelines:
+                    most_recent_session_id = next(reversed(active_pipelines))
+                    target_pipeline = active_pipelines[most_recent_session_id]
+                    target_pipeline.set_robo_active(active)
+                else:
+                    logger.debug("set_active received but no active pipeline")
+
             else:
                 logger.debug("BrowserUI sent unrecognised message type: %r", msg_type)
 

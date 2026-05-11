@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const WS_URL = 'ws://localhost:8000/ws/ui';
-
 const RECONNECT_DELAY_MS = 2000;
 
 interface Message {
@@ -12,16 +11,19 @@ interface Message {
 
 interface UseVoiceWebSocketReturn {
   pipelineState: 'listening' | 'thinking' | 'speaking' | 'disconnected';
+  roboActive: boolean;
   messages: Message[];
   currentAssistantText: string;
   sessionId: string | null;
   sendTextInput: (text: string) => void;
+  setRoboActive: (active: boolean) => void;
 }
 
 export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
   const [pipelineState, setPipelineState] = useState<
     'listening' | 'thinking' | 'speaking' | 'disconnected'
   >('disconnected');
+  const [roboActive, setRoboActiveState] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentAssistantText, setCurrentAssistantText] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -30,18 +32,54 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
 
-  // Keep a ref to currentAssistantText so event handlers always see the latest value
   const currentAssistantTextRef = useRef('');
   currentAssistantTextRef.current = currentAssistantText;
 
-  const finalizeAssistantMessage = useCallback(() => {
-    const text = currentAssistantTextRef.current;
-    if (!text) return;
-    const id = crypto.randomUUID();
-    setMessages((prev) => [...prev, { id, role: 'assistant', text }]);
-    setCurrentAssistantText('');
+  // ── Token render queue ────────────────────────────────────────────────────
+  // Tokens arrive faster than React can paint. Queue them and drain one per
+  // animation frame so each token gets its own render — word-by-word effect
+  // with zero artificial delay added to the model.
+  const tokenQueueRef = useRef<string[]>([]);
+  const rafIdRef = useRef<number | null>(null);
+
+  const drainTokenQueue = useCallback(() => {
+    rafIdRef.current = null;
+    if (!isMountedRef.current) return;
+    const queue = tokenQueueRef.current;
+    if (queue.length === 0) return;
+    // Drain 1 token per frame; catch up with 2 if queue is growing
+    const tokens = queue.splice(0, queue.length > 30 ? 2 : 1);
+    setCurrentAssistantText((prev) => prev + tokens.join(''));
+    if (queue.length > 0) {
+      rafIdRef.current = requestAnimationFrame(drainTokenQueue);
+    }
   }, []);
 
+  const scheduleTokenDrain = useCallback(() => {
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(drainTokenQueue);
+    }
+  }, [drainTokenQueue]);
+
+  const flushTokenQueue = useCallback(() => {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    const remaining = tokenQueueRef.current.splice(0).join('');
+    if (remaining) setCurrentAssistantText((prev) => prev + remaining);
+  }, []);
+
+  // ── Robo active toggle — sends set_active to server ──────────────────────
+  const setRoboActive = useCallback((active: boolean) => {
+    setRoboActiveState(active);
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'set_active', active }));
+    }
+  }, []);
+
+  // ── WebSocket connection ──────────────────────────────────────────────────
   const connect = useCallback(() => {
     if (!isMountedRef.current) return;
 
@@ -49,11 +87,7 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      if (!isMountedRef.current) {
-        ws.close();
-        return;
-      }
-      // Clear any pending reconnect timer
+      if (!isMountedRef.current) { ws.close(); return; }
       if (reconnectTimerRef.current !== null) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
@@ -62,13 +96,10 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
 
     ws.onmessage = (event: MessageEvent) => {
       if (!isMountedRef.current) return;
-
       let data: Record<string, unknown>;
       try {
         data = JSON.parse(event.data as string) as Record<string, unknown>;
-      } catch {
-        return;
-      }
+      } catch { return; }
 
       const type = data.type as string;
 
@@ -78,47 +109,46 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
           break;
         }
 
+        case 'robo_deactivated': {
+          // Server signals that a turn completed — reset the button
+          setRoboActiveState(false);
+          break;
+        }
+
         case 'transcript': {
-          // Finalize any pending assistant text before adding the user message
+          flushTokenQueue();
           if (currentAssistantTextRef.current) {
-            const assistantId = crypto.randomUUID();
-            const assistantText = currentAssistantTextRef.current;
-            setMessages((prev) => [
-              ...prev,
-              { id: assistantId, role: 'assistant', text: assistantText },
-            ]);
+            const id = crypto.randomUUID();
+            const text = currentAssistantTextRef.current;
+            setMessages((prev) => [...prev, { id, role: 'assistant', text }]);
             setCurrentAssistantText('');
           }
-          const userId = crypto.randomUUID();
           setMessages((prev) => [
             ...prev,
-            { id: userId, role: 'user', text: data.text as string },
+            { id: crypto.randomUUID(), role: 'user', text: data.text as string },
           ]);
           break;
         }
 
         case 'llm_text_chunk': {
-          setCurrentAssistantText((prev) => prev + (data.text as string));
+          tokenQueueRef.current.push(data.text as string);
+          scheduleTokenDrain();
           break;
         }
 
         case 'status': {
           const state = data.state as string;
-          if (
-            state === 'listening' ||
-            state === 'thinking' ||
-            state === 'speaking'
-          ) {
+          if (state === 'listening' || state === 'thinking' || state === 'speaking') {
             setPipelineState(state);
-            // Finalize assistant message when transitioning back to listening
-            if (state === 'listening' && currentAssistantTextRef.current) {
-              const assistantId = crypto.randomUUID();
-              const assistantText = currentAssistantTextRef.current;
-              setMessages((prev) => [
-                ...prev,
-                { id: assistantId, role: 'assistant', text: assistantText },
-              ]);
-              setCurrentAssistantText('');
+            if (state === 'listening') {
+              flushTokenQueue();
+              setTimeout(() => {
+                if (!currentAssistantTextRef.current) return;
+                const id = crypto.randomUUID();
+                const text = currentAssistantTextRef.current;
+                setMessages((prev) => [...prev, { id, role: 'assistant', text }]);
+                setCurrentAssistantText('');
+              }, 0);
             }
           }
           break;
@@ -132,35 +162,24 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
     ws.onclose = () => {
       if (!isMountedRef.current) return;
       setPipelineState('disconnected');
+      setRoboActiveState(false);
       wsRef.current = null;
-      // Schedule reconnect
       reconnectTimerRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          connect();
-        }
+        if (isMountedRef.current) connect();
       }, RECONNECT_DELAY_MS);
     };
 
-    ws.onerror = () => {
-      // onclose will fire after onerror, so reconnect is handled there
-      ws.close();
-    };
-  }, [finalizeAssistantMessage]);
+    ws.onerror = () => { ws.close(); };
+  }, [flushTokenQueue, scheduleTokenDrain]);
 
   useEffect(() => {
     isMountedRef.current = true;
     connect();
-
     return () => {
       isMountedRef.current = false;
-      if (reconnectTimerRef.current !== null) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+      if (reconnectTimerRef.current !== null) clearTimeout(reconnectTimerRef.current);
+      wsRef.current?.close();
     };
   }, [connect]);
 
@@ -173,9 +192,11 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
 
   return {
     pipelineState,
+    roboActive,
     messages,
     currentAssistantText,
     sessionId,
     sendTextInput,
+    setRoboActive,
   };
 }

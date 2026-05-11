@@ -62,6 +62,9 @@ class AudioPlayback:
                 wav_bytes = await asyncio.wait_for(self._queue.get(), timeout=0.1)
             except asyncio.TimeoutError:
                 continue
+            except asyncio.CancelledError:
+                logger.info("AudioPlayback.run() cancelled.")
+                break
 
             if wav_bytes is None:
                 # Sentinel value — stop the loop

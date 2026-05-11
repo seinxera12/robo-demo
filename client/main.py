@@ -131,7 +131,11 @@ async def main() -> None:
     # ------------------------------------------------------------------
     try:
         await asyncio.gather(ws_client.run(), audio_playback.run())
+    except asyncio.CancelledError:
+        logger.info("AudioClient tasks cancelled — shutting down.")
     finally:
+        await ws_client.close()
+        audio_playback.stop()
         audio_capture.stop()
         logger.info("AudioClient shut down.")
 
