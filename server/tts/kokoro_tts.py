@@ -19,11 +19,8 @@ from server.log import tts_log
 class KokoroTTS:
     """English TTS using Kokoro KPipeline(lang_code='a')."""
 
-<<<<<<< Updated upstream
-=======
     DEFAULT_VOICE = "af_heart"
 
->>>>>>> Stashed changes
     def __init__(self) -> None:
         self._pipeline: Optional[object] = None
 
@@ -39,7 +36,7 @@ class KokoroTTS:
         t0 = time.monotonic()
         pipeline = self._get_pipeline()
         audio_chunks = []
-        for _, _, audio in pipeline(text):
+        for _, _, audio in pipeline(text, voice=self.DEFAULT_VOICE):
             audio_chunks.append(audio)
         if not audio_chunks:
             tts_log.warning("synthesis_empty  engine=KokoroTTS  text=%r", text[:80])

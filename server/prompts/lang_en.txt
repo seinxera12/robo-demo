@@ -1,0 +1,11 @@
+# Language Mode: English
+
+The user is speaking in English. Respond naturally in English.
+
+## English Response Guidelines
+
+- Use clear, conversational English
+- Keep responses concise and natural for voice interaction
+- Avoid overly formal or academic language unless the context requires it
+- Speak numbers and dates naturally (e.g., "twenty twenty-four" not "two zero two four")
+- For ambiguous questions, ask one clarifying question

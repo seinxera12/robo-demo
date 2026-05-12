@@ -30,16 +30,21 @@ class LLMChain:
         self.primary = primary
         self.fallback = fallback
 
-    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        messages: list[dict],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> AsyncIterator[str]:
         """Stream tokens, falling back gracefully on errors."""
         try:
-            async for token in self.primary.stream(messages):
+            async for token in self.primary.stream(messages, max_tokens, temperature):
                 yield token
         except (GroqAPIError, httpx.TimeoutException, httpx.ConnectError) as e:
             llm_log.warning("primary_failed  error=%s  trying_fallback=true", e)
             logger.warning("Groq LLM failed: %s. Falling back to Gemini.", e)
             try:
-                async for token in self.fallback.stream(messages):
+                async for token in self.fallback.stream(messages, max_tokens, temperature):
                     yield token
             except Exception as e:
                 llm_log.error("fallback_failed  error=%s", e)

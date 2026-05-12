@@ -65,6 +65,11 @@ async def main() -> None:
     # 2. Instantiate components (forward-declare to allow cross-references)
     # ------------------------------------------------------------------
 
+    # Capture the running event loop once here so that callbacks fired from
+    # sounddevice's background threads (which have no event loop of their own)
+    # can safely schedule coroutines onto it via call_soon_threadsafe.
+    loop = asyncio.get_event_loop()
+
     # AudioPlayback — plays WAV chunks received from the server
     audio_playback = AudioPlayback(
         on_playback_done=lambda: logger.debug("Playback done — queue empty.")
@@ -73,7 +78,7 @@ async def main() -> None:
     # WSClient — WebSocket connection; callbacks wired below
     def _on_audio(wav_bytes: bytes) -> None:
         """Dispatch received WAV bytes to the playback queue."""
-        asyncio.get_event_loop().call_soon_threadsafe(
+        loop.call_soon_threadsafe(
             lambda: asyncio.ensure_future(audio_playback.enqueue(wav_bytes))
         )
 
@@ -91,13 +96,13 @@ async def main() -> None:
     # SileroVAD — voice activity detection; callbacks wired below
     def _on_speech_end(pcm16_bytes: bytes) -> None:
         """Send accumulated PCM16 audio to the server when speech ends."""
-        asyncio.get_event_loop().call_soon_threadsafe(
+        loop.call_soon_threadsafe(
             lambda: asyncio.ensure_future(ws_client.send_audio(pcm16_bytes))
         )
 
     def _on_barge_in() -> None:
         """Interrupt server playback and stop local audio on barge-in."""
-        asyncio.get_event_loop().call_soon_threadsafe(
+        loop.call_soon_threadsafe(
             lambda: asyncio.ensure_future(ws_client.send_interrupt())
         )
         audio_playback.stop()

@@ -25,11 +25,13 @@ from fastapi.staticfiles import StaticFiles
 
 from server.config import Config
 from server.lang.detector import LanguageDetector
+from server.llm.assembler import DeploymentConfig, PromptAssembler, detect_model_tier
 from server.llm.chain import LLMChain
 from server.llm.gemini_llm import GeminiLLMBackend
 from server.llm.groq_llm import GroqLLMBackend
 from server.llm.intent import IntentClassifier
-from server.llm.prompt_builder import PromptBuilder
+from server.llm.postprocess import PostProcessor
+from server.llm.router import Router
 from server.log import pipeline_event, pipeline_warn
 from server.models import TranscriptionResult
 from server.pipeline import PipelineState, VoicePipeline
@@ -120,19 +122,62 @@ async def lifespan(app: FastAPI):
         llm_chain = LLMChain(primary=groq_llm, fallback=groq_llm)
         logger.info("GEMINI_API_KEY not set — LLM fallback disabled (Groq only).")
 
-    # Prompt builder and language detector
-    prompt_builder = PromptBuilder()
+    # Task 14.1 — Load DeploymentConfig at startup
+    try:
+        deployment_config = DeploymentConfig.from_yaml("config/deployment.yaml")
+        logger.info(
+            "DeploymentConfig loaded from config/deployment.yaml "
+            "(deployment_id=%s, type=%s)",
+            deployment_config.deployment_id,
+            deployment_config.deployment_type,
+        )
+    except FileNotFoundError:
+        deployment_config = DeploymentConfig.default()
+        logger.info(
+            "config/deployment.yaml not found — using default DeploymentConfig "
+            "(deployment_type=desktop, language_primary=en, web_search_enabled=False)"
+        )
+
+    # Task 14.2 — Detect model tier at startup
+    model_tier = detect_model_tier(config.groq_llm_model)
+    logger.info("Model tier detected: %s (model=%s)", model_tier, config.groq_llm_model)
+
+    # Language detector
     lang_detector = LanguageDetector()
 
-    # Optional intent classifier and Tavily search
-    intent_classifier: IntentClassifier | None = None
+    # Optional Tavily search client
     tavily_client: TavilySearchClient | None = None
     if config.tavily_api_key:
-        intent_classifier = IntentClassifier()
         tavily_client = TavilySearchClient(api_key=config.tavily_api_key)
         logger.info("TavilySearchClient enabled for web search.")
     else:
         logger.info("TAVILY_API_KEY not set — web search disabled.")
+
+    # Task 14.3 — Instantiate new pipeline components
+    prompt_assembler = PromptAssembler(
+        prompts_dir="server/prompts",
+        deployment_config=deployment_config,
+        model_tier=model_tier,
+    )
+    logger.info("PromptAssembler instantiated (model_tier=%s)", model_tier)
+
+    intent_classifier = IntentClassifier(
+        llm_chain=llm_chain,
+        model_tier=model_tier,
+    )
+    logger.info("IntentClassifier instantiated (model_tier=%s)", model_tier)
+
+    router = Router(
+        deployment_config=deployment_config,
+        tavily_client=tavily_client,
+    )
+    logger.info(
+        "Router instantiated (web_search_enabled=%s)",
+        deployment_config.web_search_enabled,
+    )
+
+    post_processor = PostProcessor()
+    logger.info("PostProcessor instantiated.")
 
     # TTS engines and router
     kokoro_tts = KokoroTTS()
@@ -169,8 +214,12 @@ async def lifespan(app: FastAPI):
     app.state.llm_chain = llm_chain
     app.state.tts_router = tts_router
     app.state.lang_detector = lang_detector
-    app.state.prompt_builder = prompt_builder
+    app.state.deployment_config = deployment_config
+    app.state.model_tier = model_tier
+    app.state.prompt_assembler = prompt_assembler
     app.state.intent_classifier = intent_classifier
+    app.state.router = router
+    app.state.post_processor = post_processor
     app.state.tavily_client = tavily_client
 
     # 6. Signal readiness
@@ -196,12 +245,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Lightweight Voice Demo", lifespan=lifespan)
 
-# Mount pre-built React UI static files at the HTTP root.
-# Wrapped in try/except so the server starts even when ui/dist/ doesn't exist yet.
-try:
-    app.mount("/", StaticFiles(directory="ui/dist", html=True), name="static")
-except RuntimeError:
-    logger.warning("ui/dist/ not found — static file serving disabled")
+
 
 
 # ---------------------------------------------------------------------------
@@ -236,13 +280,15 @@ async def ws_audio_client(websocket: WebSocket):
         transcript_queue=asyncio.Queue(),
         token_queue=asyncio.Queue(),
         audio_out_queue=asyncio.Queue(),
+        deployment_config=app.state.deployment_config,
+        model_tier=app.state.model_tier,
     )
 
     # Build the broadcast function bound to the current ui_clients set
     async def broadcast_fn(message: dict) -> None:
         await broadcast_to_ui(message)
 
-    # Instantiate the pipeline with all components from app.state
+    # Task 14.4 — Instantiate the pipeline with new components from app.state
     pipeline = VoicePipeline(
         audio_client_ws=websocket,
         state=state,
@@ -250,9 +296,10 @@ async def ws_audio_client(websocket: WebSocket):
         llm_chain=app.state.llm_chain,
         tts_router=app.state.tts_router,
         lang_detector=app.state.lang_detector,
-        prompt_builder=app.state.prompt_builder,
         intent_classifier=app.state.intent_classifier,
-        tavily_client=app.state.tavily_client,
+        prompt_assembler=app.state.prompt_assembler,
+        router=app.state.router,
+        post_processor=app.state.post_processor,
         broadcast_fn=broadcast_fn,
     )
 
@@ -384,3 +431,10 @@ async def ws_browser_ui(websocket: WebSocket):
     finally:
         ui_clients.discard(websocket)
         logger.info("BrowserUI disconnected — ui_session_id=%s", ui_session_id)
+
+# Mount pre-built React UI static files at the HTTP root.
+# Wrapped in try/except so the server starts even when ui/dist/ doesn't exist yet.
+try:
+    app.mount("/", StaticFiles(directory="ui/dist", html=True), name="static")
+except RuntimeError:
+    logger.warning("ui/dist/ not found — static file serving disabled")
