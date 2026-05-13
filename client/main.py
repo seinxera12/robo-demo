@@ -47,7 +47,10 @@ async def main() -> None:
     # ------------------------------------------------------------------
     # 1. Load configuration from environment
     # ------------------------------------------------------------------
-    load_dotenv()
+    # Import CONFIG_PATH here (not at module top) to avoid a circular import
+    # when the client is imported as part of the launcher.
+    from server.config import CONFIG_PATH
+    load_dotenv(dotenv_path=CONFIG_PATH, override=False)
 
     ws_port: int = int(os.getenv("WS_PORT", "8000"))
     server_port: int = int(os.getenv("SERVER_PORT", "8000"))
