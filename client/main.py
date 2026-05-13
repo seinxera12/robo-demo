@@ -49,7 +49,7 @@ async def main() -> None:
     # ------------------------------------------------------------------
     load_dotenv()
 
-    ws_port: int = int(os.getenv("WS_PORT", "8765"))
+    ws_port: int = int(os.getenv("WS_PORT", "8000"))
     server_port: int = int(os.getenv("SERVER_PORT", "8000"))
     vad_silence_ms: int = int(os.getenv("VAD_SILENCE_MS", "600"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
