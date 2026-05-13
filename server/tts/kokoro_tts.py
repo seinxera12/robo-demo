@@ -14,6 +14,8 @@ import numpy as np
 import soundfile as sf
 
 from server.log import tts_log
+from server.config import KOKORO_MODEL_DIR
+
 
 
 class KokoroTTS:
@@ -28,7 +30,11 @@ class KokoroTTS:
         if self._pipeline is None:
             from kokoro import KPipeline
             tts_log.info("init_pipeline  engine=KokoroTTS  lang=en")
-            self._pipeline = KPipeline(lang_code='a')
+            
+            self._pipeline = KPipeline(
+                lang_code='a',
+            )
+
             tts_log.info("pipeline_ready  engine=KokoroTTS  lang=en")
         return self._pipeline
 
@@ -73,7 +79,11 @@ class KokoroJapaneseTTS:
         if self._pipeline is None:
             from kokoro import KPipeline
             tts_log.info("init_pipeline  engine=KokoroJapaneseTTS  lang=ja")
-            self._pipeline = KPipeline(lang_code='j')
+
+            self._pipeline = KPipeline(
+                lang_code='j'
+            )
+            
             tts_log.info("pipeline_ready  engine=KokoroJapaneseTTS  lang=ja")
         return self._pipeline
 

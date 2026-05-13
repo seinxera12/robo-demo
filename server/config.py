@@ -9,8 +9,57 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+import sys
 
 from dotenv import load_dotenv
+
+
+def get_base_path() -> str:
+    """
+    Returns the base directory of the application.
+    When running as a PyInstaller bundle: the folder containing the .exe
+    When running as a normal Python script: the project root
+    """
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        # sys.executable = C:\...\DemoVoiceAssistant\DemoVoiceAssistant.exe
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as normal Python script
+        # __file__ = C:\...\demo-voice-assistant\server\config.py
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def get_config_path() -> str:
+    """
+    Returns the path to the .env config file.
+
+    When running as a PyInstaller bundle: uses AppData\\Roaming\\DemoVoiceAssistant\\.env
+    so the file lives in a user-writable location (C:\\Program Files is read-only).
+
+    When running as a normal Python script: uses the project root .env
+    so existing dev workflow is unchanged.
+    """
+    if getattr(sys, 'frozen', False):
+        appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+        config_dir = os.path.join(appdata, 'DemoVoiceAssistant')
+        os.makedirs(config_dir, exist_ok=True)
+        return os.path.join(config_dir, '.env')
+    else:
+        return os.path.join(get_base_path(), '.env')
+
+
+BASE_PATH = get_base_path()
+CONFIG_PATH = get_config_path()
+
+MODELS_DIR = os.path.join(BASE_PATH, "models")
+KOKORO_MODEL_DIR = os.path.join(MODELS_DIR, "kokoro")
+
+# Derived paths used by server components — all relative to BASE_PATH
+UI_DIST_DIR = os.path.join(BASE_PATH, "ui", "dist")
+PROMPTS_DIR = os.path.join(BASE_PATH, "server", "prompts")
+DEPLOYMENT_YAML = os.path.join(BASE_PATH, "config", "deployment.yaml")
+LOG_DIR = os.path.join(BASE_PATH, "logging")
 
 
 @dataclass
@@ -28,7 +77,8 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-        load_dotenv()
+        # Load from the resolved config path (AppData in frozen, project root in dev)
+        load_dotenv(dotenv_path=CONFIG_PATH, override=False)
         return cls(
             groq_api_key=os.environ["GROQ_API_KEY"],
             gemini_api_key=os.getenv("GEMINI_API_KEY", ""),

@@ -34,7 +34,10 @@ from typing import Any
 # Paths
 # ---------------------------------------------------------------------------
 
-_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logging")
+# Import BASE_PATH from config so the log directory resolves correctly both
+# in normal Python execution and inside a PyInstaller frozen bundle.
+from server.config import LOG_DIR as _LOG_DIR  # noqa: E402
+
 _FMT     = "%(asctime)s | %(message)s"
 _DATEFMT = "%Y-%m-%d %H:%M:%S"
 

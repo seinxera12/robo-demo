@@ -39,6 +39,7 @@ from server.search.tavily_search import TavilySearchClient
 from server.stt.groq_stt import GroqSTTBackend
 from server.tts.kokoro_tts import KokoroJapaneseTTS, KokoroTTS
 from server.tts.tts_router import TTSRouter
+from server.config import UI_DIST_DIR, PROMPTS_DIR, DEPLOYMENT_YAML
 
 logger = logging.getLogger(__name__)
 
@@ -124,18 +125,20 @@ async def lifespan(app: FastAPI):
 
     # Task 14.1 — Load DeploymentConfig at startup
     try:
-        deployment_config = DeploymentConfig.from_yaml("config/deployment.yaml")
+        deployment_config = DeploymentConfig.from_yaml(DEPLOYMENT_YAML)
         logger.info(
-            "DeploymentConfig loaded from config/deployment.yaml "
+            "DeploymentConfig loaded from %s "
             "(deployment_id=%s, type=%s)",
+            DEPLOYMENT_YAML,
             deployment_config.deployment_id,
             deployment_config.deployment_type,
         )
     except FileNotFoundError:
         deployment_config = DeploymentConfig.default()
         logger.info(
-            "config/deployment.yaml not found — using default DeploymentConfig "
-            "(deployment_type=desktop, language_primary=en, web_search_enabled=False)"
+            "deployment.yaml not found at %s — using default DeploymentConfig "
+            "(deployment_type=desktop, language_primary=en, web_search_enabled=False)",
+            DEPLOYMENT_YAML,
         )
 
     # Task 14.2 — Detect model tier at startup
@@ -155,7 +158,7 @@ async def lifespan(app: FastAPI):
 
     # Task 14.3 — Instantiate new pipeline components
     prompt_assembler = PromptAssembler(
-        prompts_dir="server/prompts",
+        prompts_dir=PROMPTS_DIR,
         deployment_config=deployment_config,
         model_tier=model_tier,
     )
@@ -435,6 +438,6 @@ async def ws_browser_ui(websocket: WebSocket):
 # Mount pre-built React UI static files at the HTTP root.
 # Wrapped in try/except so the server starts even when ui/dist/ doesn't exist yet.
 try:
-    app.mount("/", StaticFiles(directory="ui/dist", html=True), name="static")
+    app.mount("/", StaticFiles(directory=UI_DIST_DIR, html=True), name="static")
 except RuntimeError:
-    logger.warning("ui/dist/ not found — static file serving disabled")
+    logger.warning("ui/dist/ not found at %s — static file serving disabled", UI_DIST_DIR)
