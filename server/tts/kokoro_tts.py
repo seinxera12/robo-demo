@@ -64,6 +64,8 @@ class KokoroTTS:
 class KokoroJapaneseTTS:
     """Japanese TTS using Kokoro KPipeline(lang_code='j')."""
 
+    DEFAULT_VOICE = "jf_alpha"
+
     def __init__(self) -> None:
         self._pipeline: Optional[object] = None
 
@@ -79,7 +81,7 @@ class KokoroJapaneseTTS:
         t0 = time.monotonic()
         pipeline = self._get_pipeline()
         audio_chunks = []
-        for _, _, audio in pipeline(text):
+        for _, _, audio in pipeline(text, voice=self.DEFAULT_VOICE):
             audio_chunks.append(audio)
         if not audio_chunks:
             tts_log.warning("synthesis_empty  engine=KokoroJapaneseTTS  text=%r", text[:80])
