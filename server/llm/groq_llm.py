@@ -21,7 +21,12 @@ class GroqLLMBackend:
         self.client = client
         self.model = model
 
-    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        messages: list[dict],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> AsyncIterator[str]:
         """Stream tokens from the Groq LLM."""
         prompt_turns = sum(1 for m in messages if m["role"] == "user")
         llm_log.info("stream_start  model=%s  messages=%d  user_turns=%d",
@@ -30,11 +35,18 @@ class GroqLLMBackend:
         token_count = 0
         first_token_ms: int | None = None
 
-        stream = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            stream=True,
-        )
+        # Build kwargs for API call
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+        }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+
+        stream = await self.client.chat.completions.create(**kwargs)
         async for chunk in stream:
             content = chunk.choices[0].delta.content
             if content:

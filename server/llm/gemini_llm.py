@@ -30,7 +30,12 @@ class GeminiLLMBackend:
         genai.configure(api_key=api_key)
         self.model_name = model
 
-    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        messages: list[dict],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> AsyncIterator[str]:
         """
         Stream tokens from the Gemini LLM.
 
@@ -41,6 +46,8 @@ class GeminiLLMBackend:
 
         Args:
             messages: OpenAI-compatible message list.
+            max_tokens: Optional maximum number of tokens to generate.
+            temperature: Optional sampling temperature (0.0 to 2.0).
 
         Yields:
             Individual token strings from the streaming response.
@@ -72,6 +79,15 @@ class GeminiLLMBackend:
         model_kwargs: dict = {}
         if system_instruction:
             model_kwargs["system_instruction"] = system_instruction
+
+        # Build generation config for parameters
+        generation_config = {}
+        if max_tokens is not None:
+            generation_config["max_output_tokens"] = max_tokens
+        if temperature is not None:
+            generation_config["temperature"] = temperature
+        if generation_config:
+            model_kwargs["generation_config"] = generation_config
 
         model = genai.GenerativeModel(self.model_name, **model_kwargs)
         chat = model.start_chat(history=chat_history)

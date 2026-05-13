@@ -1,0 +1,33 @@
+# Intent Classifier
+
+Classify the user input into one of these intents: general, environment, web_search, small_talk, out_of_scope, clarify.
+
+Detect the language: ja, en, or unknown.
+
+Rate your confidence from 0.0 to 1.0.
+
+Return ONLY this JSON format:
+
+```json
+{
+  "intent": "general",
+  "language": "en",
+  "confidence": 0.8,
+  "needs_clarification": false,
+  "clarification_reason": null,
+  "query_clean": "brief restatement of user intent"
+}
+```
+
+Example with values filled in:
+
+```json
+{
+  "intent": "web_search",
+  "language": "ja",
+  "confidence": 0.9,
+  "needs_clarification": false,
+  "clarification_reason": null,
+  "query_clean": "今日の天気を知りたい"
+}
+```

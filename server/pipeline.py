@@ -19,18 +19,19 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from server.lang.detector import LanguageDetector
+from server.llm.assembler import DeploymentConfig, PromptAssembler
 from server.llm.chain import LLMChain
 from server.llm.intent import IntentClassifier
-from server.llm.prompt_builder import PromptBuilder
+from server.llm.postprocess import PostProcessor
+from server.llm.router import Router
 from server.log import pipeline_error, pipeline_event, pipeline_separator, pipeline_warn, tts_log
 from server.models import TranscriptionResult
-from server.search.tavily_search import TavilySearchClient
 from server.stt.groq_stt import GroqSTTBackend
 from server.tts.tts_router import TTSRouter
 
@@ -62,6 +63,8 @@ class PipelineState:
     token_queue: asyncio.Queue       # str tokens from LLM (or _END_OF_TOKENS sentinel)
     audio_out_queue: asyncio.Queue   # WAV bytes for AudioClient
     robo_active: bool = False        # True when the user has activated Robo via the UI button
+    deployment_config: DeploymentConfig = field(default_factory=DeploymentConfig)  # Deployment configuration
+    model_tier: str = "groq"         # "groq" | "small", determined at startup
 
 
 # ---------------------------------------------------------------------------
@@ -80,9 +83,10 @@ class VoicePipeline:
         llm_chain: LLMChain,
         tts_router: TTSRouter,
         lang_detector: LanguageDetector,
-        prompt_builder: PromptBuilder,
-        intent_classifier: Optional[IntentClassifier],
-        tavily_client: Optional[TavilySearchClient],
+        intent_classifier: IntentClassifier,
+        prompt_assembler: PromptAssembler,
+        router: Router,
+        post_processor: PostProcessor,
         broadcast_fn: Callable,
     ) -> None:
         self._audio_ws = audio_client_ws
@@ -91,9 +95,10 @@ class VoicePipeline:
         self._llm = llm_chain
         self._tts = tts_router
         self._lang = lang_detector
-        self._prompt = prompt_builder
         self._intent = intent_classifier
-        self._tavily = tavily_client
+        self._assembler = prompt_assembler
+        self._router = router
+        self._post_processor = post_processor
         self._broadcast_fn = broadcast_fn
 
         self._tasks: list[asyncio.Task] = []
@@ -314,8 +319,14 @@ class VoicePipeline:
     # ------------------------------------------------------------------
 
     async def _llm_worker(self) -> None:
-        """Drain transcript_queue, run intent check, stream LLM tokens."""
+        """Drain transcript_queue, run intent classification, route, assemble prompt, stream LLM tokens."""
         sid = self._state.session_id[:8]
+
+        # Fallback message used when Call 2 returns empty after retry
+        _FALLBACK_MESSAGE = (
+            "I'm having trouble connecting right now. Please try again in a moment."
+        )
+
         try:
             while True:
                 try:
@@ -323,6 +334,12 @@ class VoicePipeline:
                         self._state.transcript_queue.get(), timeout=1.0
                     )
                 except asyncio.TimeoutError:
+                    continue
+
+                # Task 13.6 — Empty transcript skip logic
+                if transcript.text.strip() == "":
+                    logger.info("LLM: empty transcript — skipping LLM calls (session=%s)", sid)
+                    await self._set_state("listening")
                     continue
 
                 pipeline_event("LLM", "turn_start",
@@ -334,68 +351,161 @@ class VoicePipeline:
                 self._turn_audio_duration_ms = 0
                 self._tts_turn_complete = False
 
-                # Optional intent classification + Tavily search
-                search_context = ""
-                if self._intent is not None and self._tavily is not None:
-                    intent = self._intent.classify(transcript.text)
-                    pipeline_event("LLM", "intent_classified", session=sid, intent=intent)
-                    if intent == "SEARCH":
-                        pipeline_event("SEARCH", "query_start",
-                                       session=sid, query=transcript.text[:80])
-                        try:
-                            search_context = await self._tavily.search(transcript.text)
-                            pipeline_event("SEARCH", "query_done",
-                                           session=sid,
-                                           context_chars=len(search_context))
-                        except Exception as exc:
-                            pipeline_warn("SEARCH", "query_failed",
-                                          session=sid, error=str(exc))
-
-                messages = self._prompt.build(
-                    transcript.text,
-                    self._state.history,
-                    search_context,
-                )
-
-                full_response_parts: list[str] = []
-                self._token_count = 0
-                first_token_logged = False
+                # Task 17.1 — Unhandled exception wrapper for the entire per-turn block
                 try:
-                    async for token in self._llm.stream(messages):
-                        if self._state.interrupt:
-                            pipeline_event("LLM", "stream_interrupted",
-                                           session=sid, tokens_so_far=self._token_count)
-                            break
 
-                        if not first_token_logged:
-                            ttft_ms = int((time.monotonic() - self._speech_end_time) * 1000)
-                            pipeline_event("LLM", "first_token",
-                                           session=sid, ttft_ms=ttft_ms)
-                            first_token_logged = True
+                    # Task 13.1 — Call 1: LLM-based intent classification
+                    call1_start = time.monotonic()
+                    intent_result = await self._intent.classify(transcript.text)
+                    call1_ttft_ms = int((time.monotonic() - call1_start) * 1000)
+                    pipeline_event("LLM", "call1_intent_classified",
+                                   session=sid,
+                                   intent=intent_result.intent,
+                                   language=intent_result.language,
+                                   confidence=intent_result.confidence,
+                                   ttft_ms=call1_ttft_ms)
 
-                        full_response_parts.append(token)
-                        self._token_count += 1
-                        await self._state.token_queue.put(token)
-                        await self._broadcast({"type": "llm_text_chunk", "text": token})
+                    # Task 13.2 — Route based on intent result
+                    route_result = await self._router.route(
+                        intent_result, self._state.detected_language
+                    )
+                    pipeline_event("LLM", "routed",
+                                   session=sid,
+                                   route_type=route_result.route_type,
+                                   has_direct_response=route_result.direct_response is not None,
+                                   has_context=bool(route_result.retrieved_context))
+
+                    # Task 13.2 — If direct_response is set: skip Call 2
+                    if route_result.direct_response is not None:
+                        direct_text = route_result.direct_response
+                        pipeline_event("LLM", "direct_response",
+                                       session=sid,
+                                       route_type=route_result.route_type,
+                                       response_preview=direct_text[:60])
+                        # Push the direct response as a single token + sentinel
+                        await self._state.token_queue.put(direct_text)
+                        await self._broadcast({"type": "llm_text_chunk", "text": direct_text})
+                        await self._state.token_queue.put(_END_OF_TOKENS)
+
+                        # Store in history (direct responses are not truncated — they're short)
+                        if transcript.text.strip() and direct_text.strip():
+                            self._state.history.append(
+                                {"role": "user", "content": transcript.text}
+                            )
+                            self._state.history.append(
+                                {"role": "assistant", "content": direct_text}
+                            )
+                            while len(self._state.history) > _MAX_HISTORY_ENTRIES:
+                                self._state.history.pop(0)
+                                self._state.history.pop(0)
+                        continue
+
+                    # Task 13.3 — Assemble prompt using PromptAssembler
+                    _system_prompt, messages = self._assembler.assemble_prompt(
+                        user_input=transcript.text,
+                        intent_result=intent_result,
+                        session_history=self._state.history,
+                        retrieved_context=route_result.retrieved_context,
+                        route_type=route_result.route_type,
+                    )
+
+                    # Task 13.5 — Call 2: stream main response with retry logic
+                    async def _run_call2() -> str:
+                        """Run Call 2 and collect full response. Returns empty string on failure."""
+                        parts: list[str] = []
+                        token_count = 0
+                        first_token_logged = False
+                        try:
+                            async for token in self._llm.stream(
+                                messages, max_tokens=200, temperature=0.65
+                            ):
+                                if self._state.interrupt:
+                                    pipeline_event("LLM", "stream_interrupted",
+                                                   session=sid, tokens_so_far=token_count)
+                                    break
+
+                                if not first_token_logged:
+                                    ttft_ms = int(
+                                        (time.monotonic() - self._speech_end_time) * 1000
+                                    )
+                                    pipeline_event("LLM", "call2_first_token",
+                                                   session=sid, ttft_ms=ttft_ms)
+                                    first_token_logged = True
+
+                                parts.append(token)
+                                token_count += 1
+                        except Exception as exc:
+                            pipeline_error("LLM", "call2_stream_error",
+                                           session=sid, error=str(exc))
+                        return "".join(parts)
+
+                    full_response = await _run_call2()
+
+                    # Retry once if empty
+                    if not full_response.strip():
+                        pipeline_warn("LLM", "call2_empty_response_retrying", session=sid)
+                        full_response = await _run_call2()
+
+                    # After retry failure: use fallback message
+                    if not full_response.strip():
+                        pipeline_error("LLM", "call2_empty_after_retry_using_fallback",
+                                       session=sid)
+                        full_response = _FALLBACK_MESSAGE
+
+                    # Task 13.2 — Append clarification suffix if set
+                    if route_result.clarification_suffix:
+                        full_response = full_response + " " + route_result.clarification_suffix
+
+                    # Task 13.4 — Apply PostProcessor before pushing to TTS
+                    cleaned_response = self._post_processor.clean(
+                        full_response, self._state.detected_language
+                    )
+
+                    pipeline_event("LLM", "turn_complete",
+                                   session=sid,
+                                   response_preview=cleaned_response[:60])
+
+                    # Push cleaned response as a single token + sentinel to TTS worker
+                    await self._state.token_queue.put(cleaned_response)
+                    await self._broadcast({"type": "llm_text_chunk", "text": cleaned_response})
+                    await self._state.token_queue.put(_END_OF_TOKENS)
+
+                    # Task 13.7 — Store history with long response truncation
+                    if transcript.text.strip() and full_response.strip():
+                        # Truncate assistant response to 120 tokens (words) before storing
+                        response_words = full_response.split()
+                        if len(response_words) > 120:
+                            stored_response = " ".join(response_words[:120])
+                        else:
+                            stored_response = full_response
+
+                        self._state.history.append(
+                            {"role": "user", "content": transcript.text}
+                        )
+                        self._state.history.append(
+                            {"role": "assistant", "content": stored_response}
+                        )
+                        # Enforce _MAX_HISTORY_ENTRIES cap (remove oldest pairs first)
+                        while len(self._state.history) > _MAX_HISTORY_ENTRIES:
+                            self._state.history.pop(0)
+                            self._state.history.pop(0)
 
                 except Exception as exc:
-                    pipeline_error("LLM", "stream_error", session=sid, error=str(exc))
-
-                await self._state.token_queue.put(_END_OF_TOKENS)
-
-                full_response = "".join(full_response_parts)
-                pipeline_event("LLM", "turn_complete",
-                               session=sid,
-                               tokens=self._token_count,
-                               response_preview=full_response[:60])
-                self._token_count = 0
-
-                if transcript.text.strip() and full_response.strip():
-                    self._state.history.append({"role": "user", "content": transcript.text})
-                    self._state.history.append({"role": "assistant", "content": full_response})
-                    while len(self._state.history) > _MAX_HISTORY_ENTRIES:
-                        self._state.history.pop(0)
-                        self._state.history.pop(0)
+                    # Task 17.1 — Catch unhandled exceptions, log ERROR, emit fallback
+                    pipeline_error("LLM", "turn_unhandled_exception",
+                                   session=sid, error=str(exc))
+                    logger.error(
+                        "LLM worker unhandled exception (session=%s): %s",
+                        sid, exc, exc_info=True,
+                    )
+                    try:
+                        await self._state.token_queue.put(_FALLBACK_MESSAGE)
+                        await self._broadcast(
+                            {"type": "llm_text_chunk", "text": _FALLBACK_MESSAGE}
+                        )
+                        await self._state.token_queue.put(_END_OF_TOKENS)
+                    except Exception:
+                        pass  # Don't let queue errors propagate either
 
         except asyncio.CancelledError:
             raise

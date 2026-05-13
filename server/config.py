@@ -24,7 +24,7 @@ class Config:
     log_level: str = "INFO"
     server_host: str = "0.0.0.0"
     server_port: int = 8000
-    ws_port: int = 8765
+    ws_port: int = 8000
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -39,5 +39,5 @@ class Config:
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             server_host=os.getenv("SERVER_HOST", "0.0.0.0"),
             server_port=int(os.getenv("SERVER_PORT", "8000")),
-            ws_port=int(os.getenv("WS_PORT", "8765")),
+            ws_port=int(os.getenv("WS_PORT", "8000")),
         )

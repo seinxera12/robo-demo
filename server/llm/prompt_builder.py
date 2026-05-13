@@ -1,6 +1,12 @@
 """
 PromptBuilder — assembles the messages list for the LLM API.
 
+.. deprecated::
+    This module has been superseded by ``server/llm/assembler.py``
+    (``PromptAssembler``).  It is kept here during the transition period
+    so that any remaining import sites continue to work.  New code should
+    use ``PromptAssembler`` instead.
+
 Combines the system prompt, optional Tavily search context, conversation
 history (up to 10 turns / ~3000 token budget), and the current user
 transcript into an OpenAI-compatible message list.
@@ -20,7 +26,20 @@ _MAX_HISTORY_TURNS = 10  # Maximum number of user/assistant pairs to include
 
 
 class PromptBuilder:
-    """Builds the messages list sent to the LLM on each turn."""
+    """
+    Builds the messages list sent to the LLM on each turn.
+
+    .. deprecated::
+        ``PromptBuilder`` has been replaced by ``PromptAssembler`` in
+        ``server/llm/assembler.py``, which supports modular block assembly,
+        deployment configuration, multi-route context injection, and
+        session-memory management.
+
+        This class is retained only for backward compatibility during the
+        transition period.  New code should use ``PromptAssembler`` instead.
+        ``PromptBuilder`` will be removed in a future cleanup pass once all
+        call sites have been migrated.
+    """
 
     def build(
         self,
