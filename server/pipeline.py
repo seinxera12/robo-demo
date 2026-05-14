@@ -347,7 +347,13 @@ class VoicePipeline:
                                query=transcript.text[:80],
                                history_turns=len(self._state.history) // 2)
 
-                # Reset per-turn counters
+                # Reset per-turn counters.
+                # _speech_end_time is set here so it is always valid for the
+                # text-input path (where _stt_worker is bypassed and never
+                # sets it).  For the voice path, _stt_worker sets it earlier
+                # and this line overwrites it with a value that is only a few
+                # milliseconds later — negligible for TTFA/TTFT measurements.
+                self._speech_end_time = time.monotonic()
                 self._turn_audio_duration_ms = 0
                 self._tts_turn_complete = False
 
@@ -409,9 +415,14 @@ class VoicePipeline:
                         route_type=route_result.route_type,
                     )
 
-                    # Task 13.5 — Call 2: stream main response with retry logic
-                    async def _run_call2() -> str:
-                        """Run Call 2 and collect full response. Returns empty string on failure."""
+                    # Task 7 — Call 2: stream tokens directly to token_queue with retry logic
+                    async def _stream_call2_to_queue() -> str:
+                        """Stream Call 2 tokens directly to token_queue.
+
+                        Pushes each token to token_queue immediately as it arrives.
+                        Returns the assembled full response string (for history/broadcast).
+                        Returns empty string on failure or interrupt.
+                        """
                         parts: list[str] = []
                         token_count = 0
                         first_token_logged = False
@@ -432,6 +443,7 @@ class VoicePipeline:
                                                    session=sid, ttft_ms=ttft_ms)
                                     first_token_logged = True
 
+                                await self._state.token_queue.put(token)
                                 parts.append(token)
                                 token_count += 1
                         except Exception as exc:
@@ -439,24 +451,31 @@ class VoicePipeline:
                                            session=sid, error=str(exc))
                         return "".join(parts)
 
-                    full_response = await _run_call2()
+                    full_response = await _stream_call2_to_queue()
 
-                    # Retry once if empty
+                    # Retry once if empty — retry tokens also go to token_queue
                     if not full_response.strip():
                         pipeline_warn("LLM", "call2_empty_response_retrying", session=sid)
-                        full_response = await _run_call2()
+                        full_response = await _stream_call2_to_queue()
 
-                    # After retry failure: use fallback message
+                    # After retry failure: push fallback as a single token
                     if not full_response.strip():
                         pipeline_error("LLM", "call2_empty_after_retry_using_fallback",
                                        session=sid)
+                        await self._state.token_queue.put(_FALLBACK_MESSAGE)
                         full_response = _FALLBACK_MESSAGE
 
-                    # Task 13.2 — Append clarification suffix if set
+                    # Clarification suffix: push as an additional token to token_queue
                     if route_result.clarification_suffix:
-                        full_response = full_response + " " + route_result.clarification_suffix
+                        suffix_token = " " + route_result.clarification_suffix
+                        await self._state.token_queue.put(suffix_token)
+                        full_response = full_response + suffix_token
 
-                    # Task 13.4 — Apply PostProcessor before pushing to TTS
+                    # Signal end of stream — TTS worker can now flush and synthesise
+                    await self._state.token_queue.put(_END_OF_TOKENS)
+
+                    # Apply PostProcessor to assembled response for UI broadcast only
+                    # (raw tokens were already pushed to token_queue above)
                     cleaned_response = self._post_processor.clean(
                         full_response, self._state.detected_language
                     )
@@ -465,10 +484,8 @@ class VoicePipeline:
                                    session=sid,
                                    response_preview=cleaned_response[:60])
 
-                    # Push cleaned response as a single token + sentinel to TTS worker
-                    await self._state.token_queue.put(cleaned_response)
+                    # Broadcast cleaned text to UI (after END_OF_TOKENS is pushed)
                     await self._broadcast({"type": "llm_text_chunk", "text": cleaned_response})
-                    await self._state.token_queue.put(_END_OF_TOKENS)
 
                     # Task 13.7 — Store history with long response truncation
                     if transcript.text.strip() and full_response.strip():
@@ -517,8 +534,40 @@ class VoicePipeline:
     # ------------------------------------------------------------------
 
     async def _tts_worker(self) -> None:
-        """Drain token_queue, accumulate to sentence boundary, synthesise WAV."""
+        """Drain token_queue, accumulate to sentence boundary, synthesise WAV.
+
+        Sentences are synthesised concurrently (up to 2 in-flight tasks) via
+        asyncio.create_task().  Tasks are maintained in submission order so
+        that audio_out_queue always receives WAV chunks in sentence order,
+        regardless of which synthesis task finishes first.
+        """
         sid = self._state.session_id[:8]
+        pending_tasks: list[asyncio.Task] = []  # in submission order
+        sentence_index: int = 0                 # reset to 0 each turn
+        tts_start_time: float = 0.0             # set when first sentence of turn is created
+
+        async def _await_and_enqueue(task: asyncio.Task) -> None:
+            """Await a synthesis task and enqueue its WAV bytes if valid."""
+            nonlocal tts_start_time
+            try:
+                result = await task
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                pipeline_error("TTS", "synthesis_task_error", session=sid, error=str(exc))
+                return
+            if result is not None and not self._state.interrupt:
+                wav_bytes, idx = result
+                if wav_bytes and not self._state.interrupt:
+                    if idx == 0:
+                        tts_enqueue_ms = int((time.monotonic() - self._speech_end_time) * 1000)
+                        pipeline_event("TTS", "first_wav_enqueued",
+                                       tts_enqueue_ms=tts_enqueue_ms)
+                    wav_body_bytes = max(0, len(wav_bytes) - 44)
+                    duration_ms = int(wav_body_bytes / 2 / 24000 * 1000)
+                    self._turn_audio_duration_ms += duration_ms
+                    await self._state.audio_out_queue.put(wav_bytes)
+
         try:
             while True:
                 try:
@@ -530,15 +579,32 @@ class VoicePipeline:
 
                 if self._state.interrupt:
                     pipeline_event("TTS", "interrupt_drain", session=sid)
+                    # Cancel all in-flight synthesis tasks
+                    for task in pending_tasks:
+                        task.cancel()
+                    pending_tasks.clear()
+                    sentence_index = 0
                     await self._handle_interrupt()
                     if token is not _END_OF_TOKENS:
                         await self._drain_token_queue()
                     continue
 
                 if token is _END_OF_TOKENS:
+                    # Flush any remaining buffered text
                     remaining = self._tts.flush()
                     if remaining and not self._state.interrupt:
-                        await self._synthesize_and_enqueue(remaining)
+                        task = asyncio.create_task(
+                            self._synthesize_and_enqueue(remaining, sentence_index)
+                        )
+                        pending_tasks.append(task)
+                        sentence_index += 1
+
+                    # Await all pending tasks in submission order to preserve ordering
+                    for task in pending_tasks:
+                        await _await_and_enqueue(task)
+                    pending_tasks.clear()
+                    sentence_index = 0
+
                     # Signal to audio_output_worker that all sentences for this
                     # turn have been synthesised and enqueued.
                     self._tts_turn_complete = True
@@ -546,39 +612,72 @@ class VoicePipeline:
 
                 sentence = self._tts.accumulate(token)
                 if sentence and not self._state.interrupt:
-                    await self._synthesize_and_enqueue(sentence)
+                    # Enforce concurrency cap of 2: await oldest task before creating new one
+                    if len(pending_tasks) >= 2:
+                        oldest = pending_tasks.pop(0)
+                        await _await_and_enqueue(oldest)
+
+                    task = asyncio.create_task(
+                        self._synthesize_and_enqueue(sentence, sentence_index)
+                    )
+                    pending_tasks.append(task)
+                    sentence_index += 1
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             pipeline_error("TTS", "unexpected_error", session=sid, error=str(exc))
 
-    async def _synthesize_and_enqueue(self, sentence: str) -> None:
-        """Synthesise a sentence and push WAV bytes to audio_out_queue."""
+    async def _synthesize_and_enqueue(
+        self, sentence: str, sentence_index: int
+    ) -> tuple[bytes, int] | None:
+        """Synthesise a sentence and return (wav_bytes, sentence_index), or None.
+
+        The caller is responsible for enqueuing the returned WAV bytes to
+        audio_out_queue in the correct order (required for task 5 concurrent
+        synthesis).  This method no longer puts directly into audio_out_queue.
+        """
         sid = self._state.session_id[:8]
         try:
-            wav_bytes = await self._tts.synthesize(sentence, self._state.detected_language)
-            if not wav_bytes:
-                tts_log.warning("empty_wav  session=%s  sentence=%r", sid, sentence[:60])
-                return
-            # Estimate duration: WAV body = total_bytes - 44 byte header, 16-bit mono 24kHz
-            wav_body_bytes = max(0, len(wav_bytes) - 44)
-            duration_ms = int(wav_body_bytes / 2 / 24000 * 1000)
-            self._turn_audio_duration_ms += duration_ms
-            await self._state.audio_out_queue.put(wav_bytes)
-            pipeline_event("TTS", "synthesised",
-                           session=sid,
-                           sentence=sentence[:60],
-                           wav_kb=len(wav_bytes) // 1024)
-            tts_log.info(
-                "enqueued  session=%s  sentence=%r  wav_bytes=%d  "
-                "duration_ms=%d  turn_total_ms=%d",
-                sid, sentence[:60], len(wav_bytes), duration_ms,
-                self._turn_audio_duration_ms,
+            # Apply PostProcessor.clean before synthesis (Option A: per-sentence cleaning)
+            clean_sentence = self._post_processor.clean(
+                sentence, self._state.detected_language
             )
+            if not clean_sentence:
+                return None
+
+            # Log ttfs_ms for the first sentence of the turn
+            if sentence_index == 0:
+                ttfs_ms = int((time.monotonic() - self._speech_end_time) * 1000)
+                pipeline_event("TTS", "first_sentence_synthesis_start", ttfs_ms=ttfs_ms)
+
+            t_synth_start = time.monotonic()
+            wav_bytes = await self._tts.synthesize(clean_sentence, self._state.detected_language)
+            synth_ms = int((time.monotonic() - t_synth_start) * 1000)
+
+            if not wav_bytes:
+                tts_log.warning("empty_wav  session=%s  sentence=%r", sid, clean_sentence[:60])
+                return None
+
+            pipeline_event(
+                "TTS", "synthesised",
+                session=sid,
+                sentence_index=sentence_index,
+                sentence=clean_sentence[:60],
+                wav_kb=len(wav_bytes) // 1024,
+                synth_ms=synth_ms,
+            )
+            tts_log.info(
+                "synthesised  session=%s  sentence_index=%d  sentence=%r  "
+                "wav_bytes=%d  synth_ms=%d",
+                sid, sentence_index, clean_sentence[:60], len(wav_bytes), synth_ms,
+            )
+            return (wav_bytes, sentence_index)
+
         except Exception as exc:
             pipeline_error("TTS", "synthesis_failed",
                            session=sid, sentence=sentence[:60], error=str(exc))
+            return None
 
     async def _drain_token_queue(self) -> None:
         """Drain all remaining tokens from token_queue until the end-of-stream sentinel."""
