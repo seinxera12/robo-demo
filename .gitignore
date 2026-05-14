@@ -36,7 +36,8 @@ Thumbs.db
 *.swp
 
 #build logs
-build.log
+builder.log
+
 
 # installer output (NOT scripts)
 installer/output/
@@ -51,3 +52,9 @@ dist/
 *.spec.bak
 
 models/
+
+# Build logs
+
+
+# Windows redistributable installer
+installer/vc_redist.x64.exe
