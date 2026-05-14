@@ -59,9 +59,9 @@ async def test_route_general_intent(router_no_search):
 
 @pytest.mark.asyncio
 async def test_route_small_talk_greeting(router_no_search):
-    """Test routing for small talk with greeting."""
+    """Test that small_talk intent is routed as general (no direct_response)."""
     intent_result = IntentResult(
-        intent="small_talk",
+        intent="general",
         language="en",
         confidence=0.9,
         needs_clarification=False,
@@ -71,17 +71,17 @@ async def test_route_small_talk_greeting(router_no_search):
     
     result = await router_no_search.route(intent_result, "en")
     
-    assert result.route_type == "small_talk"
+    assert result.route_type == "general"
     assert result.retrieved_context == ""
-    assert result.direct_response == "Hello! How can I help you?"
+    assert result.direct_response is None
     assert result.clarification_suffix is None
 
 
 @pytest.mark.asyncio
 async def test_route_small_talk_japanese(router_no_search):
-    """Test routing for small talk in Japanese."""
+    """Test that greetings in Japanese are routed as general."""
     intent_result = IntentResult(
-        intent="small_talk",
+        intent="general",
         language="ja",
         confidence=0.9,
         needs_clarification=False,
@@ -91,8 +91,8 @@ async def test_route_small_talk_japanese(router_no_search):
     
     result = await router_no_search.route(intent_result, "ja")
     
-    assert result.route_type == "small_talk"
-    assert result.direct_response == "こんにちは！何かお手伝いできることはありますか？"
+    assert result.route_type == "general"
+    assert result.direct_response is None
 
 
 @pytest.mark.asyncio
@@ -306,9 +306,9 @@ async def test_route_web_search_enabled_failure(router_with_search):
 
 @pytest.mark.asyncio
 async def test_small_talk_response_thanks(router_no_search):
-    """Test small talk response selection for thanks."""
+    """Test that 'thanks' messages are routed as general."""
     intent_result = IntentResult(
-        intent="small_talk",
+        intent="general",
         language="en",
         confidence=0.9,
         needs_clarification=False,
@@ -318,14 +318,15 @@ async def test_small_talk_response_thanks(router_no_search):
     
     result = await router_no_search.route(intent_result, "en")
     
-    assert result.direct_response == "You're welcome!"
+    assert result.route_type == "general"
+    assert result.direct_response is None
 
 
 @pytest.mark.asyncio
 async def test_small_talk_response_goodbye(router_no_search):
-    """Test small talk response selection for goodbye."""
+    """Test that 'goodbye' messages are routed as general."""
     intent_result = IntentResult(
-        intent="small_talk",
+        intent="general",
         language="en",
         confidence=0.9,
         needs_clarification=False,
@@ -335,14 +336,15 @@ async def test_small_talk_response_goodbye(router_no_search):
     
     result = await router_no_search.route(intent_result, "en")
     
-    assert result.direct_response == "Goodbye! Feel free to reach out if you need anything."
+    assert result.route_type == "general"
+    assert result.direct_response is None
 
 
 @pytest.mark.asyncio
 async def test_small_talk_response_how_are_you(router_no_search):
-    """Test small talk response selection for how are you."""
+    """Test that 'how are you' messages are routed as general."""
     intent_result = IntentResult(
-        intent="small_talk",
+        intent="general",
         language="en",
         confidence=0.9,
         needs_clarification=False,
@@ -352,7 +354,8 @@ async def test_small_talk_response_how_are_you(router_no_search):
     
     result = await router_no_search.route(intent_result, "en")
     
-    assert result.direct_response == "I'm doing well, thank you!"
+    assert result.route_type == "general"
+    assert result.direct_response is None
 
 
 @pytest.mark.asyncio
@@ -377,7 +380,7 @@ async def test_clarification_japanese(router_no_search):
 async def test_unknown_language_defaults_to_english(router_no_search):
     """Test that unknown language defaults to English for templates."""
     intent_result = IntentResult(
-        intent="small_talk",
+        intent="general",
         language="unknown",
         confidence=0.9,
         needs_clarification=False,
@@ -387,5 +390,6 @@ async def test_unknown_language_defaults_to_english(router_no_search):
     
     result = await router_no_search.route(intent_result, "unknown")
     
-    # Should use English templates as fallback
-    assert result.direct_response == "Hello! How can I help you?"
+    # Greetings now go through Call 2 as general
+    assert result.route_type == "general"
+    assert result.direct_response is None
