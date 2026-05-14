@@ -31,7 +31,7 @@ import threading
 import time
 import traceback
 import webbrowser
-
+from server.main import app
 # ---------------------------------------------------------------------------
 # Crash logger — write fatal errors to AppData before any UI is available
 # ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ def _run_server() -> None:
         load_dotenv(dotenv_path=CONFIG_PATH, override=False)
 
         uvicorn.run(
-            "server.main:app",
+            app,
             host=os.getenv("SERVER_HOST", "0.0.0.0"),
             port=int(os.getenv("SERVER_PORT", "8000")),
             log_config=None,   # uvicorn access logs suppressed; app uses its own

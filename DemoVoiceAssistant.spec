@@ -5,7 +5,7 @@
 # Entry point: launcher.py
 #
 # Build command (run from project root with venv active):
-#   pyinstaller DemoVoiceAssistant.spec --clean
+#   pyinstaller DemoVoiceAssistant.spec --clean --noconfirm --log-level DEBUG > builder.log 2>&1
 #
 # Output: dist\DemoVoiceAssistant\DemoVoiceAssistant.exe
 #
@@ -14,40 +14,59 @@
 #   - Kokoro model weights are downloaded at runtime (HuggingFace cache)
 #     because the installed kokoro==0.9.4 does not support local model paths
 #   - All app paths resolve via server.config.BASE_PATH (sys.frozen-aware)
+#   - UPX disabled: most large DLLs are native and UPX adds AV-detection risk
+#     with negligible size gain on this stack
 
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+import certifi
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_all
 
 block_cipher = None
+
+# ── Helper: warn on empty collections ────────────────────────────────────────
+def guarded_collect(name, collector=collect_data_files):
+    result = collector(name)
+    if not result:
+        print(f"[WARNING] No files collected for: {name} — check the package is installed in your venv")
+    return result
+
 
 # ── Data files ────────────────────────────────────────────────────────────────
 
 # sounddevice ships PortAudio binaries inside _sounddevice_data/
-sounddevice_datas = collect_data_files('_sounddevice_data')
+sounddevice_datas   = guarded_collect('_sounddevice_data')
 
 # soundfile ships libsndfile64bit.dll inside _soundfile_data/
-soundfile_datas = collect_data_files('_soundfile_data')
+soundfile_datas     = guarded_collect('_soundfile_data')
 
 # espeakng_loader ships espeak-ng-data/ dictionaries and espeak-ng.dll
-espeakng_datas = collect_data_files('espeakng_loader')
+espeakng_datas      = guarded_collect('espeakng_loader')
 
 # misaki G2P data files (language dictionaries, etc.)
-misaki_datas = collect_data_files('misaki')
+misaki_datas        = guarded_collect('misaki')
 
 # kokoro package data (voice configs, etc.)
-kokoro_datas = collect_data_files('kokoro')
+kokoro_datas        = guarded_collect('kokoro')
 
 # pyopenjtalk ships htsvoice/ data for Japanese TTS
-pyopenjtalk_datas = collect_data_files('pyopenjtalk')
+pyopenjtalk_datas   = guarded_collect('pyopenjtalk')
 
 # unidic_lite — Japanese morphological dictionary used by fugashi/misaki
-unidic_datas = collect_data_files('unidic_lite')
+unidic_datas        = guarded_collect('unidic_lite')
 
-# spaCy English model (en_core_web_sm) — used by misaki English G2P
-spacy_model_datas = collect_data_files('en_core_web_sm')
+# spaCy English model — used by misaki English G2P
+# IMPORTANT: verify path before building:
+#   python -c "import en_core_web_sm; print(en_core_web_sm.__file__)"
+# If printed path is NOT inside your venv's site-packages, replace with:
+#   spacy_model_datas = [('C:/full/path/to/en_core_web_sm', 'en_core_web_sm')]
+spacy_model_datas   = guarded_collect('en_core_web_sm')
 
 # groq SDK may include JSON schema files
-groq_datas = collect_data_files('groq')
+groq_datas          = guarded_collect('groq')
+
+# certifi CA bundle — required for HTTPS calls from groq / google-generativeai
+# Without this, SSL verification fails at runtime in the frozen build
+certifi_datas       = [(certifi.where(), 'certifi')]
 
 # Pre-built React UI static files
 ui_datas = [
@@ -57,8 +76,16 @@ ui_datas = [
 # Deployment config and prompt templates
 config_datas = [
     ('config/deployment.yaml', 'config'),
-    ('server/prompts', 'server/prompts'),
+    ('server/prompts',         'server/prompts'),
 ]
+
+# Force server package to land as real .py files on disk (not buried in PYZ).
+# Required because uvicorn needs to import 'server.main' by string at runtime,
+# and string-based importlib lookups cannot reach inside the PYZ archive.
+server_source   = collect_all('server')
+server_datas    = server_source[0]
+server_binaries = server_source[1]
+server_hiddens  = server_source[2]
 
 all_datas = (
     sounddevice_datas
@@ -70,25 +97,29 @@ all_datas = (
     + unidic_datas
     + spacy_model_datas
     + groq_datas
+    + certifi_datas
     + ui_datas
     + config_datas
+    + server_datas
 )
+
 
 # ── Binaries (native DLLs) ────────────────────────────────────────────────────
 
 # torch CPU ships torch_cpu.dll and other native libs
-torch_binaries = collect_dynamic_libs('torch')
+torch_binaries   = guarded_collect('torch',   collector=collect_dynamic_libs)
 
 # fugashi ships libmecab DLL inside fugashi.libs/
-fugashi_binaries = collect_dynamic_libs('fugashi')
+fugashi_binaries = guarded_collect('fugashi', collector=collect_dynamic_libs)
 
-all_binaries = torch_binaries + fugashi_binaries
+all_binaries = torch_binaries + fugashi_binaries + server_binaries
+
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
-# Modules that PyInstaller misses because they are imported dynamically
+# Modules PyInstaller misses because they are imported dynamically
 # (via importlib, inside try/except, or inside conditional branches).
 
-hidden_imports = [
+hidden_imports = server_hiddens + [
     # ── uvicorn internals ──────────────────────────────────────────────────
     'uvicorn.logging',
     'uvicorn.loops',
@@ -104,13 +135,34 @@ hidden_imports = [
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
 
+    # ── async runtime (uvicorn + httpx depend on these) ────────────────────
+    'anyio',
+    'anyio._backends._asyncio',
+    'anyio._backends._trio',
+    'sniffio',
+
+    # ── HTTP clients (groq + google-generativeai use httpx internally) ─────
+    'httpx',
+    'httpx._transports',
+    'httpx._transports.default',
+    'httpx._transports.asgi',
+    'httpcore',
+    'httpcore._async',
+    'httpcore._async.connection',
+    'httpcore._async.connection_pool',
+    'httpcore._async.http11',
+    'httpcore._sync',
+    'httpcore._sync.connection',
+    'httpcore._sync.connection_pool',
+    'httpcore._sync.http11',
+
     # ── WebSockets ─────────────────────────────────────────────────────────
     'websockets',
     'websockets.legacy',
     'websockets.legacy.server',
     'websockets.legacy.client',
 
-    # ── torch / torchaudio ─────────────────────────────────────────────────
+    # ── torch ──────────────────────────────────────────────────────────────
     'torch',
     'torch.jit',
 
@@ -155,15 +207,15 @@ hidden_imports = [
 
     # ── SSL / certificates ─────────────────────────────────────────────────
     'certifi',
+    'ssl',
 
     # ── Standard library items sometimes missed ────────────────────────────
     'email.mime.multipart',
     'email.mime.text',
-    'pkg_resources',
-    'pkg_resources.extern',
     'importlib.metadata',
     'yaml',
 ]
+
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 
@@ -173,11 +225,12 @@ a = Analysis(
     binaries=all_binaries,
     datas=all_datas,
     hiddenimports=hidden_imports,
-    hookspath=['hooks'],        # custom hooks in hooks/ folder
+    hookspath=['hooks'],
     hooksconfig={},
-    runtime_hooks=[],
+    # rthook_paths.py runs before any app code — inserts _MEIPASS into sys.path
+    # so pkg_resources and string-based importlib lookups find bundled packages
+    runtime_hooks=['hooks/rthook_paths.py'],
     excludes=[
-        # Packages we definitely do not use — trim bundle size
         'matplotlib',
         'numpy.distutils',
         'pytest',
@@ -185,7 +238,10 @@ a = Analysis(
         'IPython',
         'jupyter',
         'notebook',
-        'PIL',
+        # Excluding only the GUI/Qt submodules of PIL, not the whole package.
+        # Remove these two lines if you get an ImportError for PIL at runtime.
+        'PIL.ImageTk',
+        'PIL.ImageQt',
         'cv2',
         'sklearn',
         'scipy',
@@ -212,13 +268,18 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    console=False,          # No console window — set True for debugging
+    upx=False,          # UPX disabled — AV risk outweighs size gain on this stack
+    # ── CONSOLE MODE ──────────────────────────────────────────────────────
+    # console=True  → keep during development so crashes are visible
+    # console=False → flip only for the final user-facing release build
+    console=True,
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # icon='assets\\icon.ico',          # Uncomment once icon.ico is placed in assets/
+    icon='assets\\icon.ico',
+    # version_info.txt must exist in the project root.
+    # See earlier instructions for the file contents, or remove this line.
     version='version_info.txt',
 )
 
@@ -228,20 +289,21 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,          # UPX disabled
     upx_exclude=[
-        # Never UPX these — they break or cause false-positive AV detections
+        # Kept for reference if UPX is re-enabled later.
+        # IMPORTANT: exact filenames only — globs are silently ignored.
         'vcruntime140.dll',
         'vcruntime140_1.dll',
         'msvcp140.dll',
         'python311.dll',
         'torch_cpu.dll',
         'torch_python.dll',
-        # Audio DLLs
-        '_sounddevice*.pyd',
+        # Exact names — verify against your dist/ folder after first build
+        '_sounddevice.pyd',
         'libsndfile_64bit.dll',
         'espeak-ng.dll',
-        'libmecab*.dll',
+        'libmecab.dll',
     ],
     name='DemoVoiceAssistant',
 )

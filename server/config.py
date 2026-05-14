@@ -17,16 +17,18 @@ from dotenv import load_dotenv
 def get_base_path() -> str:
     """
     Returns the base directory of the application.
-    When running as a PyInstaller bundle: the folder containing the .exe
-    When running as a normal Python script: the project root
+    When running as a PyInstaller --onedir bundle: sys._MEIPASS
+    (_internal/ folder where all bundled files land).
+    When running as a normal Python script: the project root.
     """
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
-        # sys.executable = C:\...\DemoVoiceAssistant\DemoVoiceAssistant.exe
-        return os.path.dirname(sys.executable)
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        # Running as PyInstaller bundle — all bundled files live under _MEIPASS
+        # (_internal/ in --onedir mode).
+        return sys._MEIPASS
     else:
         # Running as normal Python script
-        # __file__ = C:\...\demo-voice-assistant\server\config.py
+        # __file__ = <project_root>/server/config.py
+        # two dirname() calls walk up to the project root
         return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -58,6 +60,7 @@ KOKORO_MODEL_DIR = os.path.join(MODELS_DIR, "kokoro")
 # Derived paths used by server components — all relative to BASE_PATH
 UI_DIST_DIR = os.path.join(BASE_PATH, "ui", "dist")
 PROMPTS_DIR = os.path.join(BASE_PATH, "server", "prompts")
+CONFIG_DIR  = os.path.join(BASE_PATH, "config")
 DEPLOYMENT_YAML = os.path.join(BASE_PATH, "config", "deployment.yaml")
 LOG_DIR = os.path.join(BASE_PATH, "logging")
 

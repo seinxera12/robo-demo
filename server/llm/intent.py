@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from server.llm.chain import LLMChain
+from server.config import PROMPTS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class IntentClassifier:
         self._model_tier = model_tier
         
         # Load classifier prompt based on model tier
-        prompts_dir = Path(__file__).parent.parent / "prompts"
+        prompts_dir = Path(PROMPTS_DIR)
         if model_tier == "small":
             prompt_file = prompts_dir / "classifier_small.txt"
         else:
