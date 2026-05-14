@@ -15,15 +15,12 @@ class RouteResult:
     """
     Output from the Router containing the selected route and retrieved context.
     
-    This dataclass holds the routing decision and any context needed for
-    prompt assembly, including direct responses that skip the main LLM call.
-    
     Attributes:
         route_type: The selected route - one of "general", "environment", 
-                   "web_search", "small_talk", "out_of_scope", or "clarify"
+                   "web_search", "out_of_scope", or "clarify"
         retrieved_context: RAG chunks or search results (empty string if not applicable)
-        direct_response: Set for small_talk/OOS/low-confidence clarify routes
-                        that skip Call 2. None for routes that need Call 2.
+        direct_response: Set for OOS/low-confidence clarify routes that skip Call 2.
+                        None for routes that need Call 2.
         clarification_suffix: Appended to Call 2 response for partial clarification
                              (confidence 0.3-0.45). None otherwise.
     """
@@ -40,24 +37,8 @@ class Router:
     
     This class handles routing decisions based on intent classification results,
     retrieves context for environment and web search routes, and provides
-    direct responses for small talk and out-of-scope queries.
+    direct responses for out-of-scope queries.
     """
-    
-    # Hardcoded small talk responses by language
-    SMALL_TALK_RESPONSES = {
-        "ja": {
-            "greeting": "こんにちは！何かお手伝いできることはありますか？",
-            "thanks": "どういたしまして！",
-            "goodbye": "さようなら！また何かあればお声がけください。",
-            "how_are_you": "私は元気です。ありがとうございます！",
-        },
-        "en": {
-            "greeting": "Hello! How can I help you?",
-            "thanks": "You're welcome!",
-            "goodbye": "Goodbye! Feel free to reach out if you need anything.",
-            "how_are_you": "I'm doing well, thank you!",
-        },
-    }
     
     # Clarification templates by language
     CLARIFICATION_TEMPLATES = {
@@ -128,7 +109,6 @@ class Router:
         #    conf < 0.45  → general route, clarification_suffix = partial_match msg
         #    conf >= 0.45 → fall through to normal intent routing below
         #
-        #  intent == "small_talk"    → hardcoded direct_response, skip Call 2
         #  intent == "out_of_scope"  → configured OOS direct_response, skip Call 2
         #
         #  intent == "environment":
@@ -142,6 +122,9 @@ class Router:
         #    web_search disabled                    → fall back to general route
         #
         #  default → general route (no context, no direct response)
+        #  NOTE: small_talk is intentionally removed. Short replies like "yes",
+        #        greetings, and casual messages are routed as "general" so they
+        #        go through Call 2 and preserve conversation context.
         # -----------------------------------------------------------------------
         
         # Handle clarification strategy first (applies to any intent)
@@ -186,20 +169,6 @@ class Router:
                     direct_response=None,
                     clarification_suffix=clarification_suffix,
                 )
-        
-        # Route: small_talk
-        if intent == "small_talk":
-            direct_response = self._get_small_talk_response(
-                intent_result.query_clean,
-                detected_language
-            )
-            logger.info(f"route=small_talk direct_response=True")
-            return RouteResult(
-                route_type="small_talk",
-                retrieved_context="",
-                direct_response=direct_response,
-                clarification_suffix=None,
-            )
         
         # Route: out_of_scope
         if intent == "out_of_scope":
@@ -322,43 +291,6 @@ class Router:
             direct_response=None,
             clarification_suffix=None,
         )
-    
-    def _get_small_talk_response(self, query_clean: str, detected_language: str) -> str:
-        """
-        Get hardcoded small talk response based on query content and language.
-        
-        Args:
-            query_clean: Cleaned user query from IntentResult
-            detected_language: Detected language code
-        
-        Returns:
-            Hardcoded small talk response string
-        """
-        # Select language, default to "en" if unknown
-        lang = detected_language if detected_language in self.SMALL_TALK_RESPONSES else "en"
-        responses = self.SMALL_TALK_RESPONSES[lang]
-        
-        # Simple keyword matching to select response type
-        query_lower = query_clean.lower()
-        
-        # Check for greeting patterns
-        if any(word in query_lower for word in ["hello", "hi", "hey", "こんにちは", "おはよう", "こんばんは"]):
-            return responses["greeting"]
-        
-        # Check for thanks patterns
-        if any(word in query_lower for word in ["thank", "thanks", "ありがとう", "どうも"]):
-            return responses["thanks"]
-        
-        # Check for goodbye patterns
-        if any(word in query_lower for word in ["bye", "goodbye", "see you", "さようなら", "じゃあね", "またね"]):
-            return responses["goodbye"]
-        
-        # Check for "how are you" patterns
-        if any(phrase in query_lower for phrase in ["how are you", "how're you", "元気", "調子"]):
-            return responses["how_are_you"]
-        
-        # Default to greeting if no pattern matches
-        return responses["greeting"]
     
     async def _retrieve_environment_context(self) -> str:
         """

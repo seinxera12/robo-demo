@@ -14,10 +14,9 @@ Analyze the user's input and determine:
 
 ## Intent Categories
 
-- **general**: General knowledge questions, how-to requests, explanations
+- **general**: General knowledge questions, how-to requests, explanations, greetings, thanks, casual conversation, and any short or ambiguous messages
 - **environment**: Questions about this specific location, facility, or deployment environment
 - **web_search**: Questions requiring current information, news, weather, or real-time data
-- **small_talk**: Greetings, thanks, goodbyes, casual conversation
 - **out_of_scope**: Requests the assistant cannot or should not handle
 - **clarify**: Input is too ambiguous or unclear to classify
 
