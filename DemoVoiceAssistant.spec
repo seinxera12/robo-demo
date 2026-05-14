@@ -164,15 +164,11 @@ hidden_imports = server_hiddens + [
 
     # ── torch ──────────────────────────────────────────────────────────────
     'torch',
-    'torch.jit',
-    'torch.version',           # ← add
+    'torch.jit',          
     'torch.nn',                # ← add
     'torch.nn.functional',     # ← add
     'torch.nn.modules',        # ← add
     'torch.nn.modules.rnn',    # ← add (kokoro uses RNN layers)
-    'torch.distributions',     # ← add
-    'torch.backends',          # ← add
-    'torch.backends.cpu',      # ← add
 
     # ── Audio I/O ──────────────────────────────────────────────────────────
     'sounddevice',
@@ -237,7 +233,7 @@ a = Analysis(
     hooksconfig={},
     # rthook_paths.py runs before any app code — inserts _MEIPASS into sys.path
     # so pkg_resources and string-based importlib lookups find bundled packages
-    runtime_hooks=['hooks/rthook_paths.py','hooks/rthook_torch.py',],
+    runtime_hooks=['hooks/rthook_paths.py',],
     excludes=[
         'matplotlib',
         'numpy.distutils',

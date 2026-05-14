@@ -31,7 +31,15 @@ import threading
 import time
 import traceback
 import webbrowser
-from server.main import app
+
+# ---------------------------------------------------------------------------
+# IMPORTANT: Do NOT add any application imports here at module level.
+# All imports from server.* and client.* must happen inside functions below.
+# Reason: torch must be pre-initialized in the server thread (not main thread)
+# before server.main is imported, and crash logger + SSL must run first.
+# ---------------------------------------------------------------------------
+
+
 # ---------------------------------------------------------------------------
 # Crash logger — write fatal errors to AppData before any UI is available
 # ---------------------------------------------------------------------------
@@ -49,7 +57,7 @@ def _setup_crash_logger() -> None:
             format="%(asctime)s %(levelname)s — %(message)s",
         )
     except Exception:
-        pass  # If we can't set up logging, carry on regardless
+        pass
 
 
 _setup_crash_logger()
@@ -65,18 +73,17 @@ def _fix_ssl_certs() -> None:
 
     Without this, API calls to Groq / Gemini / Tavily can fail with
     CERTIFICATE_VERIFY_FAILED on machines whose system trust store is
-    incomplete or misconfigured.  certifi is always present in the bundle
-    because it is a dependency of httpx / requests.
+    incomplete or misconfigured.
     """
     if not getattr(sys, 'frozen', False):
-        return  # dev environment — use system certs as normal
+        return
     try:
         import certifi
         cert_path = certifi.where()
         os.environ.setdefault('SSL_CERT_FILE', cert_path)
         os.environ.setdefault('REQUESTS_CA_BUNDLE', cert_path)
     except Exception:
-        pass  # non-fatal — API calls will still work on most machines
+        pass
 
 
 _fix_ssl_certs()
@@ -100,20 +107,52 @@ def _get_mode() -> str:
 # ---------------------------------------------------------------------------
 
 def _run_server() -> None:
-    """Start the uvicorn server.  Intended to run in a background thread."""
+    """Start the uvicorn server. Intended to run in a background thread."""
     try:
+        # ── Torch pre-init ────────────────────────────────────────────────
+        # MUST run in this thread (the server/kokoro thread), not main thread.
+        # Reason: torch._C (the C extension) and torch.version must be fully
+        # initialized in the same thread that will later call torch.load()
+        # via kokoro TTS synthesis. If pre-init runs in a different thread,
+        # the C-level initialization state is not visible here and kokoro's
+        # first torch.load() call re-enters torch init mid-flight, causing:
+        # "partially initialized module 'torch' has no attribute 'version'"
+        #
+        # torch.version — the submodule (torch/version.py), NOT torch.__version__
+        #   (the string). These are different. kokoro accesses torch.version.cuda
+        #   and torch.version.git_version internally via torch._C at load time.
+        # torch._C — torch's C extension, the real root of the circular import.
+        # torch.storage / torch.serialization — required by torch.load().
+        # torch.cuda — accessed by torch.version internals even on CPU builds.
+        import torch
+        import torch.version
+        import torch.nn
+        import torch.nn.functional
+        import torch.jit
+        import torch._C
+        import torch.storage
+        import torch.serialization
+        import torch.cuda
+
+        # Verify the specific attributes kokoro accesses during synthesis
+        _ = torch.__version__
+        _ = torch.version.__version__
+        _ = torch.version.cuda
+        _ = torch.version.git_version
+
+        # ── Server startup ────────────────────────────────────────────────
         import uvicorn
+        from server.main import app
         from server.config import CONFIG_PATH
         from dotenv import load_dotenv
 
-        # Ensure env is loaded in this thread before importing server.main
         load_dotenv(dotenv_path=CONFIG_PATH, override=False)
 
         uvicorn.run(
             app,
             host=os.getenv("SERVER_HOST", "0.0.0.0"),
             port=int(os.getenv("SERVER_PORT", "8000")),
-            log_config=None,   # uvicorn access logs suppressed; app uses its own
+            log_config=None,
         )
     except Exception:
         logging.error("Server thread crashed:\n%s", traceback.format_exc())
@@ -140,7 +179,7 @@ def _open_browser_after_delay(port: int, delay: float = 3.0) -> None:
 def main() -> None:
     mode = _get_mode()
 
-    # ── Server-only mode (used internally, e.g. for subprocess spawning) ────
+    # ── Server-only mode ─────────────────────────────────────────────────────
     if mode == "server":
         _run_server()
         return
@@ -159,7 +198,6 @@ def main() -> None:
     if needs_setup():
         success = run_setup_screen()
         if not success:
-            # User closed the setup window without saving — exit cleanly
             sys.exit(0)
 
     # Step 2 — Load env so we can read the port before starting threads
@@ -173,7 +211,7 @@ def main() -> None:
     server_thread = threading.Thread(target=_run_server, daemon=True, name="server")
     server_thread.start()
 
-    # Step 4 — Open the browser after a short delay (non-blocking)
+    # Step 4 — Open the browser after a short delay
     browser_thread = threading.Thread(
         target=_open_browser_after_delay,
         args=(server_port,),
@@ -182,8 +220,7 @@ def main() -> None:
     )
     browser_thread.start()
 
-    # Step 5 — Run the AudioClient in the main thread's event loop.
-    # This keeps the process alive until the user closes the app.
+    # Step 5 — Run the AudioClient in the main thread's event loop
     try:
         from client.main import main as client_main
         asyncio.run(client_main())

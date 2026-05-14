@@ -46,10 +46,10 @@ _DATEFMT = "%Y-%m-%d %H:%M:%S"
 # ---------------------------------------------------------------------------
 
 def _make_file_handler(filename: str, level: int = logging.DEBUG) -> RotatingFileHandler:
-    os.makedirs(_LOG_DIR, exist_ok=True)
+    log_path = os.path.join(_LOG_DIR, filename)
     fh = RotatingFileHandler(
-        os.path.join(_LOG_DIR, filename),
-        maxBytes=2 * 1024 * 1024,
+        log_path,
+        maxBytes=5 * 1024 * 1024,
         backupCount=3,
         encoding="utf-8",
     )

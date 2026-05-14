@@ -57,12 +57,29 @@ CONFIG_PATH = get_config_path()
 MODELS_DIR = os.path.join(BASE_PATH, "models")
 KOKORO_MODEL_DIR = os.path.join(MODELS_DIR, "kokoro")
 
-# Derived paths used by server components — all relative to BASE_PATH
+# Derived paths used by server components — all relative to BASE_PATH (read-only assets)
 UI_DIST_DIR = os.path.join(BASE_PATH, "ui", "dist")
 PROMPTS_DIR = os.path.join(BASE_PATH, "server", "prompts")
 CONFIG_DIR  = os.path.join(BASE_PATH, "config")
 DEPLOYMENT_YAML = os.path.join(BASE_PATH, "config", "deployment.yaml")
-LOG_DIR = os.path.join(BASE_PATH, "logging")
+
+# ── Write-safe directories (APPDATA in frozen, project root in dev) ───────────
+if getattr(sys, 'frozen', False):
+    _WRITE_BASE = os.path.join(
+        os.environ.get('APPDATA', os.path.expanduser('~')),
+        'DemoVoiceAssistant'
+    )
+else:
+    _WRITE_BASE = BASE_PATH
+
+LOG_DIR   = os.path.join(_WRITE_BASE, 'logs')
+DATA_DIR  = _WRITE_BASE
+CACHE_DIR = os.path.join(_WRITE_BASE, 'cache')
+TEMP_DIR  = os.path.join(os.environ.get('TEMP', _WRITE_BASE), 'DemoVoiceAssistant')
+
+# Create all write directories on import — safe to call multiple times
+for _d in (LOG_DIR, DATA_DIR, CACHE_DIR, TEMP_DIR):
+    os.makedirs(_d, exist_ok=True)
 
 
 @dataclass
