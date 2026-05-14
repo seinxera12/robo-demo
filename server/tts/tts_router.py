@@ -13,6 +13,12 @@ Sentence boundary detection:
     preceded by a known short-word pattern (Mr, Dr, Mt, St, vs, etc.) or a
     single capital letter (initials like "U.S.").
   - Japanese boundary characters (。？！) always end a sentence.
+  - `,` and `、` act as soft boundaries when the buffer is already ≥
+    _COMMA_FLUSH_MIN_CHARS characters (Fix A). This prevents very long sentences
+    from delaying synthesis — audio starts at the first natural pause point.
+  - If the buffer exceeds _HARD_FLUSH_CHARS without any boundary, it is flushed
+    immediately at the next token boundary (Fix B). This is a safety net for
+    pathological cases like run-on sentences with no punctuation.
 """
 
 import logging
@@ -28,6 +34,15 @@ _JP_BOUNDARIES = frozenset('。？！')
 
 # English hard boundaries — always end a sentence
 _EN_HARD_BOUNDARIES = frozenset('?!')
+
+# Soft comma boundaries — flush when buffer length exceeds this threshold.
+# English comma and Japanese reading comma (、).
+_COMMA_CHARS = frozenset(',、')
+_COMMA_FLUSH_MIN_CHARS = 60   # Fix A: chars in buffer before a comma triggers a flush
+
+# Hard flush cap — flush the entire buffer if it grows beyond this length
+# without hitting any boundary (Fix B).
+_HARD_FLUSH_CHARS = 120
 
 # Common English abbreviations that end with a period but are NOT sentence ends.
 # Matched case-insensitively against the word immediately before the dot.
@@ -138,18 +153,44 @@ class TTSRouter:
     def accumulate(self, token: str) -> Optional[str]:
         """Append *token* to the internal buffer.
 
-        Returns the accumulated sentence when a real sentence boundary is
-        detected (not an abbreviation period), then resets the buffer.
-        Returns None if no boundary reached yet.
+        Returns the accumulated sentence when a boundary is detected, then
+        resets the buffer to the remainder.  Returns None if no boundary yet.
+
+        Boundary priority (highest to lowest):
+          1. Hard sentence boundaries: . ? ! 。？！ — always flush.
+          2. Soft comma boundaries (Fix A): , 、 — flush when buffer ≥
+             _COMMA_FLUSH_MIN_CHARS. Breaks long sentences at natural pauses
+             so synthesis starts sooner.
+          3. Hard character cap (Fix B): flush the whole buffer when it exceeds
+             _HARD_FLUSH_CHARS, regardless of punctuation. Safety net for
+             run-on sentences.
         """
         self._buffer += token
+
+        # Pass 1: scan for hard sentence boundaries and soft comma boundaries
         for i, ch in enumerate(self._buffer):
+            # Hard sentence boundary
             if ch in _JP_BOUNDARIES or ch in _EN_HARD_BOUNDARIES or ch == '.':
                 if _is_sentence_boundary(self._buffer, i):
                     sentence = self._buffer[: i + 1].strip()
                     self._buffer = self._buffer[i + 1:]
                     if sentence:
                         return sentence
+
+            # Fix A — soft comma boundary: only when buffer is long enough
+            if ch in _COMMA_CHARS and len(self._buffer) >= _COMMA_FLUSH_MIN_CHARS:
+                sentence = self._buffer[: i + 1].strip()
+                self._buffer = self._buffer[i + 1:]
+                if sentence:
+                    return sentence
+
+        # Fix B — hard character cap: flush entire buffer if it's too long
+        if len(self._buffer) >= _HARD_FLUSH_CHARS:
+            sentence = self._buffer.strip()
+            self._buffer = ""
+            if sentence:
+                return sentence
+
         return None
 
     def flush(self) -> Optional[str]:

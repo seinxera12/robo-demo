@@ -187,14 +187,18 @@ async def lifespan(app: FastAPI):
     kokoro_ja_tts = KokoroJapaneseTTS()
     tts_router = TTSRouter(en_tts=kokoro_tts, ja_tts=kokoro_ja_tts)
 
-    # 4. Pre-warm KokoroTTS by synthesising "Hello." in a thread executor
-    logger.info("Pre-warming KokoroTTS (this may take a few seconds on first run)...")
+    # 4. Pre-warm both Kokoro TTS engines concurrently at startup
+    # Requirements: 3.1, 3.2, 3.3, 3.6
+    logger.info("Pre-warming KokoroTTS and KokoroJapaneseTTS...")
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, kokoro_tts._synthesize_sync, "Hello.")
-        logger.info("KokoroTTS pre-warm complete.")
+        await asyncio.gather(
+            loop.run_in_executor(None, kokoro_tts.warm_up),
+            loop.run_in_executor(None, kokoro_ja_tts.warm_up),
+        )
+        logger.info("Both Kokoro TTS engines pre-warmed successfully.")
     except Exception as exc:
-        logger.warning("KokoroTTS pre-warm failed (non-fatal): %s", exc)
+        logger.warning("Kokoro TTS pre-warm failed (non-fatal): %s", exc)
 
     # 5. Test Groq API connectivity
     logger.info("Testing Groq API connectivity...")

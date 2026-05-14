@@ -62,6 +62,19 @@ class KokoroTTS:
         )
         return wav_bytes
 
+    def warm_up(self) -> None:
+        """Pre-load the Kokoro pipeline and voice file without producing audio.
+
+        Calls _get_pipeline() to load the model, then load_voice() to download
+        and cache the voice .pt file. This ensures the first synthesis call has
+        no cold-start or network-fetch penalty.
+
+        Requirements: 3.4
+        """
+        pipeline = self._get_pipeline()
+        pipeline.load_voice(self.DEFAULT_VOICE)
+        tts_log.info("warm_up_complete  engine=KokoroTTS  voice=%s", self.DEFAULT_VOICE)
+
     async def synthesize(self, text: str) -> bytes:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._synthesize_sync, text)
@@ -109,6 +122,19 @@ class KokoroJapaneseTTS:
             text[:80], len(wav_bytes), ms, duration_ms,
         )
         return wav_bytes
+
+    def warm_up(self) -> None:
+        """Pre-load the Kokoro Japanese pipeline and voice file without producing audio.
+
+        Calls _get_pipeline() to load the model, then load_voice() to download
+        and cache the voice .pt file. This ensures the first synthesis call has
+        no cold-start or network-fetch penalty.
+
+        Requirements: 3.5
+        """
+        pipeline = self._get_pipeline()
+        pipeline.load_voice(self.DEFAULT_VOICE)
+        tts_log.info("warm_up_complete  engine=KokoroJapaneseTTS  voice=%s", self.DEFAULT_VOICE)
 
     async def synthesize(self, text: str) -> bytes:
         loop = asyncio.get_event_loop()

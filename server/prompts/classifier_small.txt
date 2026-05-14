@@ -1,6 +1,8 @@
 # Intent Classifier
 
-Classify the user input into one of these intents: general, environment, web_search, small_talk, out_of_scope, clarify.
+Classify the user input into one of these intents: general, environment, web_search, out_of_scope, clarify.
+
+Use **general** for greetings, thanks, goodbyes, casual conversation, short replies like "yes" or "no", and any message that continues an ongoing conversation. When in doubt, use **general**.
 
 Detect the language: ja, en, or unknown.
 
