@@ -6,7 +6,6 @@ logging/
 
 # Python virtual environment
 venv/
-.kiro/
 # Python cache
 __pycache__/
 *.py[cod]

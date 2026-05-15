@@ -19,7 +19,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from server.pipeline import _END_OF_TOKENS, PipelineState, VoicePipeline
+from server.pipeline import _END_OF_TOKENS, InterruptController, PipelineState, VoicePipeline
 from server.llm.assembler import DeploymentConfig
 
 
@@ -78,6 +78,9 @@ def _make_pipeline(state: PipelineState) -> VoicePipeline:
     tts_router.accumulate = MagicMock(return_value=None)
     tts_router.flush = MagicMock(return_value="")
     pipeline._tts = tts_router
+
+    # InterruptController — required by _tts_worker
+    pipeline._ic = InterruptController(state.session_id)
 
     return pipeline
 
@@ -321,6 +324,7 @@ async def test_5_3_interrupt_cancels_pending_tasks_and_queue_empty():
 
     # Set interrupt flag — this should cause the worker to cancel all pending tasks
     state.interrupt = True
+    pipeline._ic.request_interrupt(source="test_interrupt")
 
     # Push a token to unblock the worker's token_queue.get() so it sees the interrupt
     await state.token_queue.put("interrupt_trigger_token")

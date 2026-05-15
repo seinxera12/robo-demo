@@ -45,6 +45,95 @@ _MAX_HISTORY_ENTRIES = 20
 
 
 # ---------------------------------------------------------------------------
+# Interrupt controller
+# ---------------------------------------------------------------------------
+
+
+class InterruptController:
+    """Owns the current Turn ID and CancellationToken for one pipeline session.
+
+    All methods are safe to call from any asyncio coroutine on the same
+    event loop. No asyncio.Lock is used in any hot-path method.
+    """
+
+    def __init__(self, session_id: str) -> None:
+        self._session_id = session_id[:8]
+        self._turn_id: int = 0
+        self.cancelled: asyncio.Event = asyncio.Event()
+        self._synthesis_tasks: list[asyncio.Task] = []
+        self._interrupt_start: float = 0.0
+        self._last_duration_ms: float = 0.0
+
+    # --- Hot-path (synchronous, non-blocking) ---
+
+    def request_interrupt(self, source: str = "unknown") -> None:
+        """Set the CancellationToken. Idempotent — safe to call multiple times."""
+        if self.cancelled.is_set():
+            return  # already interrupted for this turn
+        self._interrupt_start = time.monotonic()
+        self.cancelled.set()
+        logger.info(
+            "INTERRUPT turn_id=%d source=%s session=%s",
+            self._turn_id, source, self._session_id,
+        )
+
+    def begin_turn(self) -> int:
+        """Clear the CancellationToken and assign a new Turn ID. Returns new ID."""
+        self._turn_id += 1
+        self.cancelled.clear()
+        self._synthesis_tasks.clear()
+        if self._interrupt_start:
+            self._last_duration_ms = (time.monotonic() - self._interrupt_start) * 1000
+            logger.info(
+                "INTERRUPT_COMPLETE turn_id=%d cleanup_ms=%.1f new_turn_id=%d session=%s",
+                self._turn_id - 1, self._last_duration_ms,
+                self._turn_id, self._session_id,
+            )
+            self._interrupt_start = 0.0
+        return self._turn_id
+
+    @property
+    def current_turn_id(self) -> int:
+        return self._turn_id
+
+    @property
+    def last_interrupt_duration_ms(self) -> float:
+        return self._last_duration_ms
+
+    # --- Task registry ---
+
+    def register_task(self, task: asyncio.Task) -> None:
+        """Register a synthesis task so cleanup() can cancel it."""
+        self._synthesis_tasks.append(task)
+
+    # --- Cleanup (async, called on stop or explicit cleanup) ---
+
+    async def cleanup(self) -> None:
+        """Cancel all tracked synthesis tasks and wait up to 2 s for them."""
+        tasks = [t for t in self._synthesis_tasks if not t.done()]
+        if not tasks:
+            return
+        for t in tasks:
+            t.cancel()
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "IC.cleanup: %d task(s) did not finish within 2s (session=%s)",
+                len(tasks), self._session_id,
+            )
+        self._synthesis_tasks.clear()
+
+    async def wait_cleared(self) -> None:
+        """Await until the CancellationToken is no longer set."""
+        while self.cancelled.is_set():
+            await asyncio.sleep(0.02)
+
+
+# ---------------------------------------------------------------------------
 # Pipeline state
 # ---------------------------------------------------------------------------
 
@@ -65,6 +154,7 @@ class PipelineState:
     robo_active: bool = False        # True when the user has activated Robo via the UI button
     deployment_config: DeploymentConfig = field(default_factory=DeploymentConfig)  # Deployment configuration
     model_tier: str = "groq"         # "groq" | "small", determined at startup
+    interrupt_controller: "InterruptController | None" = None  # set by VoicePipeline.__init__
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +193,10 @@ class VoicePipeline:
 
         self._tasks: list[asyncio.Task] = []
 
+        # Interrupt controller — one per session
+        self._ic = InterruptController(state.session_id)
+        state.interrupt_controller = self._ic
+
         # Per-turn timing / token counters (reset each turn)
         self._speech_end_time: float = 0.0
         self._token_count: int = 0
@@ -136,11 +230,12 @@ class VoicePipeline:
             pipeline_error("SESSION", "unhandled_exception", session=sid, error=str(exc))
             logger.error("VoicePipeline.run() unhandled exception: %s", exc, exc_info=True)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Cancel all pipeline worker tasks."""
         sid = self._state.session_id[:8]
         pipeline_event("SESSION", "stopped", session=sid)
         pipeline_separator()
+        await self._ic.cleanup()
         for task in self._tasks:
             if not task.done():
                 task.cancel()
@@ -221,10 +316,15 @@ class VoicePipeline:
                         if parsed.get("type") == "interrupt":
                             pipeline_event("AUDIO_IN", "interrupt_received",
                                            session=sid, via="binary")
+                            self._ic.request_interrupt(source="explicit_message")
                             self._state.interrupt = True
                             continue
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
+                    # New PCM16 frame while pipeline is generating — trigger barge-in
+                    if self._state.state in ("thinking", "speaking"):
+                        self._ic.request_interrupt(source="new_audio_frame")
+                        self._state.interrupt = True
                     await self._state.audio_queue.put(raw_bytes)
 
                 elif raw_text is not None:
@@ -233,6 +333,7 @@ class VoicePipeline:
                         if parsed.get("type") == "interrupt":
                             pipeline_event("AUDIO_IN", "interrupt_received",
                                            session=sid, via="text")
+                            self._ic.request_interrupt(source="explicit_message")
                             self._state.interrupt = True
                     except json.JSONDecodeError as exc:
                         pipeline_warn("AUDIO_IN", "bad_json", session=sid, error=str(exc))
@@ -243,7 +344,7 @@ class VoicePipeline:
             pipeline_error("AUDIO_IN", "unexpected_error", session=sid, error=str(exc))
         finally:
             pipeline_event("AUDIO_IN", "shutting_down_pipeline", session=sid)
-            self.stop()
+            asyncio.ensure_future(self.stop())
 
     # ------------------------------------------------------------------
     # Worker 2: stt_worker
@@ -336,11 +437,25 @@ class VoicePipeline:
                 except asyncio.TimeoutError:
                     continue
 
+                # Task 4.1 — Guard: wait for any in-progress interrupt cleanup to finish
+                # before processing the next transcript.
+                if self._ic.cancelled.is_set():
+                    try:
+                        await asyncio.wait_for(self._ic.wait_cleared(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "LLM: timed out waiting for interrupt clear (session=%s)", sid
+                        )
+                        continue
+
                 # Task 13.6 — Empty transcript skip logic
                 if transcript.text.strip() == "":
                     logger.info("LLM: empty transcript — skipping LLM calls (session=%s)", sid)
                     await self._set_state("listening")
                     continue
+
+                # Task 4.1 — Begin a new turn: clears CancellationToken, assigns new Turn ID.
+                turn_id = self._ic.begin_turn()
 
                 pipeline_event("LLM", "turn_start",
                                session=sid,
@@ -430,7 +545,7 @@ class VoicePipeline:
                             async for token in self._llm.stream(
                                 messages, max_tokens=200, temperature=0.65
                             ):
-                                if self._state.interrupt:
+                                if self._ic.cancelled.is_set():
                                     pipeline_event("LLM", "stream_interrupted",
                                                    session=sid, tokens_so_far=token_count)
                                     break
@@ -452,6 +567,16 @@ class VoicePipeline:
                         return "".join(parts)
 
                     full_response = await _stream_call2_to_queue()
+
+                    # Task 4.1 — If cancelled mid-stream: push sentinel, log, skip history/broadcast
+                    if self._ic.cancelled.is_set():
+                        token_count = len(full_response.split()) if full_response else 0
+                        await self._state.token_queue.put(_END_OF_TOKENS)
+                        logger.info(
+                            "LLM cancelled turn_id=%d tokens_discarded=%d session=%s",
+                            turn_id, token_count, sid,
+                        )
+                        continue
 
                     # Retry once if empty — retry tokens also go to token_queue
                     if not full_response.strip():
@@ -556,9 +681,15 @@ class VoicePipeline:
             except Exception as exc:
                 pipeline_error("TTS", "synthesis_task_error", session=sid, error=str(exc))
                 return
-            if result is not None and not self._state.interrupt:
+            if self._ic.cancelled.is_set():
+                logger.debug(
+                    "TTS: discarding stale WAV (cancelled) turn_id=%d session=%s",
+                    self._ic.current_turn_id, sid,
+                )
+                return
+            if result is not None:
                 wav_bytes, idx = result
-                if wav_bytes and not self._state.interrupt:
+                if wav_bytes:
                     if idx == 0:
                         tts_enqueue_ms = int((time.monotonic() - self._speech_end_time) * 1000)
                         pipeline_event("TTS", "first_wav_enqueued",
@@ -577,14 +708,16 @@ class VoicePipeline:
                 except asyncio.TimeoutError:
                     continue
 
-                if self._state.interrupt:
-                    pipeline_event("TTS", "interrupt_drain", session=sid)
+                if self._ic.cancelled.is_set():
+                    pipeline_event("TTS", "interrupt_drain", session=sid,
+                                   turn_id=self._ic.current_turn_id)
                     # Cancel all in-flight synthesis tasks
                     for task in pending_tasks:
                         task.cancel()
+                    await asyncio.gather(*pending_tasks, return_exceptions=True)
                     pending_tasks.clear()
                     sentence_index = 0
-                    await self._handle_interrupt()
+                    self._tts.flush()
                     if token is not _END_OF_TOKENS:
                         await self._drain_token_queue()
                     continue
@@ -592,10 +725,11 @@ class VoicePipeline:
                 if token is _END_OF_TOKENS:
                     # Flush any remaining buffered text
                     remaining = self._tts.flush()
-                    if remaining and not self._state.interrupt:
+                    if remaining and not self._ic.cancelled.is_set():
                         task = asyncio.create_task(
                             self._synthesize_and_enqueue(remaining, sentence_index)
                         )
+                        self._ic.register_task(task)
                         pending_tasks.append(task)
                         sentence_index += 1
 
@@ -611,7 +745,7 @@ class VoicePipeline:
                     continue
 
                 sentence = self._tts.accumulate(token)
-                if sentence and not self._state.interrupt:
+                if sentence and not self._ic.cancelled.is_set():
                     # Enforce concurrency cap of 2: await oldest task before creating new one
                     if len(pending_tasks) >= 2:
                         oldest = pending_tasks.pop(0)
@@ -620,6 +754,7 @@ class VoicePipeline:
                     task = asyncio.create_task(
                         self._synthesize_and_enqueue(sentence, sentence_index)
                     )
+                    self._ic.register_task(task)
                     pending_tasks.append(task)
                     sentence_index += 1
 
@@ -717,19 +852,38 @@ class VoicePipeline:
             chunk_send_time: float = 0.0
 
             while True:
-                if self._state.interrupt:
-                    pipeline_event("AUDIO_OUT", "interrupt_clear", session=sid)
-                    await self._set_state("listening")
-                    self._state.interrupt = False
-                    first_chunk = True
-                    self._turn_audio_duration_ms = 0
-                    self._tts_turn_complete = False
+                if self._ic.cancelled.is_set():
+                    # Drain audio_out_queue without sending anything to the client
+                    discarded = 0
                     while not self._state.audio_out_queue.empty():
                         try:
                             self._state.audio_out_queue.get_nowait()
+                            discarded += 1
                         except asyncio.QueueEmpty:
                             break
-                    await asyncio.sleep(0.05)
+                    pipeline_event("AUDIO_OUT", "interrupt_flush",
+                                   session=sid,
+                                   turn_id=self._ic.current_turn_id,
+                                   discarded_chunks=discarded)
+                    # Reset per-turn counters
+                    first_chunk = True
+                    self._turn_audio_duration_ms = 0
+                    self._tts_turn_complete = False
+                    self._state.interrupt = False
+                    # Transition to listening with up to 3 retries
+                    for attempt in range(3):
+                        try:
+                            await self._set_state("listening")
+                            break
+                        except Exception as exc:
+                            if attempt < 2:
+                                await asyncio.sleep(0.05)
+                            else:
+                                logger.error(
+                                    "AUDIO_OUT: failed to set listening state after 3 attempts: %s",
+                                    exc,
+                                )
+                    self._ic.begin_turn()
                     continue
 
                 try:
@@ -761,7 +915,14 @@ class VoicePipeline:
                             first_chunk = True
                     continue
 
+                # Per-chunk guard: discard if cancelled after dequeue
+                if self._ic.cancelled.is_set():
+                    logger.debug("AUDIO_OUT: discarding chunk (cancelled) session=%s", sid)
+                    continue
+
                 if first_chunk:
+                    if self._ic.cancelled.is_set():
+                        continue  # do not send "speaking" for a cancelled turn
                     ttfa_ms = int((time.monotonic() - self._speech_end_time) * 1000)
                     pipeline_event("AUDIO_OUT", "first_audio_chunk",
                                    session=sid, ttfa_ms=ttfa_ms)

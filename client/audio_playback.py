@@ -82,7 +82,7 @@ class AudioPlayback:
         logger.info("AudioPlayback stopped.")
 
     def stop(self) -> None:
-        """Stop playback immediately and clear the queue."""
+        """Stop playback immediately, clear the queue, and halt sounddevice."""
         self._running = False
         # Drain the queue so pending chunks are discarded
         while not self._queue.empty():
@@ -91,7 +91,16 @@ class AudioPlayback:
                 self._queue.task_done()
             except asyncio.QueueEmpty:
                 break
+        self.stop_stream()
         logger.debug("AudioPlayback stopped and queue cleared.")
+
+    def stop_stream(self) -> None:
+        """Halt the currently playing sounddevice stream immediately."""
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception as exc:
+            logger.debug("AudioPlayback.stop_stream: %s", exc)
 
     # ------------------------------------------------------------------
     # Internal helpers
