@@ -46,7 +46,7 @@ __pycache__/
 *.pyc
 
 # PyInstaller
-build/
+installer
 dist/
 *.spec.bak
 
@@ -54,6 +54,5 @@ models/
 
 # Build logs
 
-
-# Windows redistributable installer
-installer/vc_redist.x64.exe
+build/
+builder.log
