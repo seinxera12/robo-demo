@@ -25,6 +25,7 @@ build/
 
 # Node / UI dev dependencies (ui/dist/ is committed pre-built)
 ui/node_modules/
+ui/dist/
 
 # OS
 .DS_Store
@@ -56,3 +57,4 @@ models/
 
 build/
 builder.log
+logs/
