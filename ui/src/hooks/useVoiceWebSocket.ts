@@ -9,6 +9,13 @@ interface Message {
   text: string;
 }
 
+interface UseVoiceWebSocketOptions {
+  /** Called when the server emits `robo_deactivated` (end-of-turn / VAD silence). */
+  onRoboDeactivated?: () => void;
+  /** Called when the WebSocket connection closes. */
+  onWsClose?: () => void;
+}
+
 interface UseVoiceWebSocketReturn {
   pipelineState: 'listening' | 'thinking' | 'speaking' | 'disconnected';
   roboActive: boolean;
@@ -19,7 +26,7 @@ interface UseVoiceWebSocketReturn {
   setRoboActive: (active: boolean) => void;
 }
 
-export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
+export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceWebSocketReturn {
   const [pipelineState, setPipelineState] = useState<
     'listening' | 'thinking' | 'speaking' | 'disconnected'
   >('disconnected');
@@ -31,6 +38,9 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+  // Keep options in a ref so the stable `connect` callback always sees the latest values
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const currentAssistantTextRef = useRef('');
   currentAssistantTextRef.current = currentAssistantText;
@@ -112,6 +122,7 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
         case 'robo_deactivated': {
           // Server signals that a turn completed — reset the button
           setRoboActiveState(false);
+          optionsRef.current?.onRoboDeactivated?.();
           break;
         }
 
@@ -163,6 +174,7 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
       if (!isMountedRef.current) return;
       setPipelineState('disconnected');
       setRoboActiveState(false);
+      optionsRef.current?.onWsClose?.();
       wsRef.current = null;
       reconnectTimerRef.current = setTimeout(() => {
         if (isMountedRef.current) connect();
