@@ -917,61 +917,37 @@ class VoicePipeline:
             while True:
                 if self._state.interrupt:
                     pipeline_event("AUDIO_OUT", "interrupt_clear", session=sid)
-                    await self._set_state("listening")
-                    self._state.interrupt = False
-                    first_chunk = True
-                    self._turn_audio_duration_ms = 0
-                    self._tts_turn_complete = False
-                    # Advance the turn counter so any in-flight synthesis tasks
-                    # that complete after this drain are also discarded by
-                    # _await_and_enqueue — even if _llm_worker hasn't started
-                    # the next turn yet (e.g. VAD interrupt mid-synthesis).
-                    # Only increment here if _llm_worker has NOT already done so
-                    # for this interrupt (i.e. it hasn't transitioned to "thinking"
-                    # yet). If state is already "thinking", _llm_worker already
-                    # incremented the counter and we must not double-count.
-                    # We check the state BEFORE calling _set_state above — capture
-                    # it via the old_state that _set_state logs. Since we just set
-                    # state to "listening", we check if the previous state was
-                    # "speaking" (VAD/audio interrupt) vs "thinking" (text barge-in
-                    # where _llm_worker already ran _set_state("thinking") first).
-                    # The simplest proxy: if _tts_turn_complete was False and
-                    # _llm_worker has not yet started (no pending tasks in
-                    # token_queue), we are in a VAD-only interrupt. But the
-                    # reliable signal is: did _llm_worker already increment?
-                    # We track this with a dedicated flag.
-                    if not self._llm_claimed_interrupt:
-                        self._current_turn_id += 1
-                    self._llm_claimed_interrupt = False
+
+                    # Drain any queued audio chunks that must not be played.
+                    discarded = 0
                     while not self._state.audio_out_queue.empty():
                         try:
                             self._state.audio_out_queue.get_nowait()
                             discarded += 1
                         except asyncio.QueueEmpty:
                             break
+
+                    # Advance the turn counter so any in-flight synthesis tasks
+                    # that complete after this drain are discarded by
+                    # _await_and_enqueue.  Only increment here if _llm_worker
+                    # has NOT already done so for this interrupt (text barge-in
+                    # path increments in _llm_worker before reaching here).
+                    if not self._llm_claimed_interrupt:
+                        self._current_turn_id += 1
+                    self._llm_claimed_interrupt = False
+
                     pipeline_event("AUDIO_OUT", "interrupt_flush",
                                    session=sid,
                                    turn_id=self._ic.current_turn_id,
                                    discarded_chunks=discarded)
-                    # Reset per-turn counters
+
+                    # Reset per-turn counters and clear the interrupt flag.
                     first_chunk = True
                     self._turn_audio_duration_ms = 0
                     self._tts_turn_complete = False
                     self._state.interrupt = False
-                    # Transition to listening with up to 3 retries
-                    for attempt in range(3):
-                        try:
-                            await self._set_state("listening")
-                            break
-                        except Exception as exc:
-                            if attempt < 2:
-                                await asyncio.sleep(0.05)
-                            else:
-                                logger.error(
-                                    "AUDIO_OUT: failed to set listening state after 3 attempts: %s",
-                                    exc,
-                                )
-                    self._ic.begin_turn()
+
+                    await self._set_state("listening")
                     continue
 
                 try:
