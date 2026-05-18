@@ -395,6 +395,11 @@ async def ws_browser_ui(websocket: WebSocket):
                     # Inject as a TranscriptionResult into the pipeline's transcript_queue
                     transcript = TranscriptionResult(text=text, language="en", duration=0.0)
                     try:
+                        if target_pipeline._state.state == "speaking":
+                            pipeline_event("WS", "text_input_barge_in",
+                                           session=most_recent_session_id[:8], text=text[:80])
+                            target_pipeline._state.interrupt = True
+
                         await target_pipeline._state.transcript_queue.put(transcript)
                         # Also broadcast the transcript to all BrowserUI clients
                         await broadcast_to_ui(
