@@ -45,7 +45,9 @@ __pycache__/
 *.pyc
 
 # PyInstaller
+installer
 build/
+builder.log
 dist/
 *.spec.bak
 
