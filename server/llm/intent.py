@@ -27,7 +27,6 @@ _VALID_INTENTS = frozenset([
     "general",
     "environment",
     "web_search",
-    "small_talk",
     "out_of_scope",
     "clarify",
 ])
@@ -38,7 +37,7 @@ class IntentResult:
     """Structured output from the LLM-based intent classifier.
     
     Attributes:
-        intent: One of "general", "environment", "web_search", "small_talk", 
+        intent: One of "general", "environment", "web_search",
                 "out_of_scope", or "clarify"
         language: Detected language code ("ja", "en", or "unknown")
         confidence: Confidence score in range [0.0, 1.0]
