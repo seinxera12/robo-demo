@@ -203,6 +203,20 @@ class VoicePipeline:
         self._turn_audio_duration_ms: int = 0   # total audio queued this turn (ms)
         self._tts_turn_complete: bool = False    # set True when tts_worker finishes a turn
 
+        # Monotonically increasing turn counter.  Incremented by _llm_worker at
+        # the start of every new turn.  _tts_worker stamps each synthesis task
+        # with the turn ID at creation time; _await_and_enqueue discards the
+        # result if the turn ID has advanced (i.e. an interrupt arrived and a
+        # new turn started) before synthesis completed.  This closes the TOCTOU
+        # race where _audio_output_worker clears the interrupt flag before
+        # _tts_worker has had a chance to check it.
+        self._current_turn_id: int = 0
+
+        # Set to True by _llm_worker when it increments _current_turn_id for
+        # a text barge-in turn.  Read and cleared by _audio_output_worker so
+        # it knows not to double-increment the counter for the same interrupt.
+        self._llm_claimed_interrupt: bool = False
+
         # Throttle the "audio_dropped_robo_idle" log — only emit once per 60s
         self._last_idle_drop_log: float = 0.0
 
@@ -462,6 +476,17 @@ class VoicePipeline:
                                query=transcript.text[:80],
                                history_turns=len(self._state.history) // 2)
 
+                # Broadcast 'thinking' so the frontend can lock the text input
+                # and mic button while LLM generation is in progress.
+                await self._set_state("thinking")
+
+                # Advance the turn counter so any in-flight TTS synthesis tasks
+                # from the previous turn are discarded when they complete.
+                # Set _llm_claimed_interrupt so _audio_output_worker knows not
+                # to double-increment for the same interrupt event.
+                self._current_turn_id += 1
+                self._llm_claimed_interrupt = True
+
                 # Reset per-turn counters.
                 # _speech_end_time is set here so it is always valid for the
                 # text-input path (where _stt_worker is bypassed and never
@@ -668,11 +693,17 @@ class VoicePipeline:
         """
         sid = self._state.session_id[:8]
         pending_tasks: list[asyncio.Task] = []  # in submission order
+        pending_turn_ids: list[int] = []         # turn ID for each pending task
         sentence_index: int = 0                 # reset to 0 each turn
         tts_start_time: float = 0.0             # set when first sentence of turn is created
 
-        async def _await_and_enqueue(task: asyncio.Task) -> None:
-            """Await a synthesis task and enqueue its WAV bytes if valid."""
+        async def _await_and_enqueue(task: asyncio.Task, task_turn_id: int) -> None:
+            """Await a synthesis task and enqueue its WAV bytes if valid.
+
+            Discards the result if the turn ID has advanced since the task was
+            created — this closes the TOCTOU race where _audio_output_worker
+            clears the interrupt flag before synthesis completes.
+            """
             nonlocal tts_start_time
             try:
                 result = await task
@@ -681,11 +712,12 @@ class VoicePipeline:
             except Exception as exc:
                 pipeline_error("TTS", "synthesis_task_error", session=sid, error=str(exc))
                 return
-            if self._ic.cancelled.is_set():
-                logger.debug(
-                    "TTS: discarding stale WAV (cancelled) turn_id=%d session=%s",
-                    self._ic.current_turn_id, sid,
-                )
+            # Discard if a new turn has started (interrupt was processed) or
+            # the interrupt flag is still set.
+            if task_turn_id != self._current_turn_id or self._state.interrupt:
+                pipeline_event("TTS", "stale_synthesis_discarded", session=sid,
+                               task_turn_id=task_turn_id,
+                               current_turn_id=self._current_turn_id)
                 return
             if result is not None:
                 wav_bytes, idx = result
@@ -716,6 +748,7 @@ class VoicePipeline:
                         task.cancel()
                     await asyncio.gather(*pending_tasks, return_exceptions=True)
                     pending_tasks.clear()
+                    pending_turn_ids.clear()
                     sentence_index = 0
                     self._tts.flush()
                     if token is not _END_OF_TOKENS:
@@ -725,19 +758,35 @@ class VoicePipeline:
                 if token is _END_OF_TOKENS:
                     # Flush any remaining buffered text
                     remaining = self._tts.flush()
-                    if remaining and not self._ic.cancelled.is_set():
+                    if remaining and not self._state.interrupt:
+                        task_turn_id = self._current_turn_id
                         task = asyncio.create_task(
                             self._synthesize_and_enqueue(remaining, sentence_index)
                         )
                         self._ic.register_task(task)
                         pending_tasks.append(task)
+                        pending_turn_ids.append(task_turn_id)
                         sentence_index += 1
 
-                    # Await all pending tasks in submission order to preserve ordering
-                    for task in pending_tasks:
-                        await _await_and_enqueue(task)
+                    # Await all pending tasks in submission order to preserve ordering.
+                    # Check interrupt/turn-id after each await — if an interrupt arrives
+                    # while we are blocked in synthesis, bail out without setting
+                    # _tts_turn_complete (audio_output_worker handles cleanup).
+                    interrupted = False
+                    for task, task_turn_id in zip(pending_tasks, pending_turn_ids):
+                        await _await_and_enqueue(task, task_turn_id)
+                        if self._state.interrupt or task_turn_id != self._current_turn_id:
+                            interrupted = True
+                            break
                     pending_tasks.clear()
+                    pending_turn_ids.clear()
                     sentence_index = 0
+
+                    if interrupted:
+                        pipeline_event("TTS", "interrupt_drain", session=sid)
+                        await self._handle_interrupt()
+                        await self._drain_token_queue()
+                        continue
 
                     # Signal to audio_output_worker that all sentences for this
                     # turn have been synthesised and enqueued.
@@ -745,17 +794,31 @@ class VoicePipeline:
                     continue
 
                 sentence = self._tts.accumulate(token)
-                if sentence and not self._ic.cancelled.is_set():
-                    # Enforce concurrency cap of 2: await oldest task before creating new one
+                if sentence and not self._state.interrupt:
+                    # Enforce concurrency cap of 2: await oldest task before creating new one.
+                    # Check interrupt/turn-id after the await.
                     if len(pending_tasks) >= 2:
-                        oldest = pending_tasks.pop(0)
-                        await _await_and_enqueue(oldest)
+                        oldest_task = pending_tasks.pop(0)
+                        oldest_turn_id = pending_turn_ids.pop(0)
+                        await _await_and_enqueue(oldest_task, oldest_turn_id)
+                        if self._state.interrupt or oldest_turn_id != self._current_turn_id:
+                            pipeline_event("TTS", "interrupt_drain", session=sid)
+                            for t in pending_tasks:
+                                t.cancel()
+                            pending_tasks.clear()
+                            pending_turn_ids.clear()
+                            sentence_index = 0
+                            await self._handle_interrupt()
+                            await self._drain_token_queue()
+                            continue
 
+                    task_turn_id = self._current_turn_id
                     task = asyncio.create_task(
                         self._synthesize_and_enqueue(sentence, sentence_index)
                     )
                     self._ic.register_task(task)
                     pending_tasks.append(task)
+                    pending_turn_ids.append(task_turn_id)
                     sentence_index += 1
 
         except asyncio.CancelledError:
@@ -852,8 +915,10 @@ class VoicePipeline:
             chunk_send_time: float = 0.0
 
             while True:
-                if self._ic.cancelled.is_set():
-                    # Drain audio_out_queue without sending anything to the client
+                if self._state.interrupt:
+                    pipeline_event("AUDIO_OUT", "interrupt_clear", session=sid)
+
+                    # Drain any queued audio chunks that must not be played.
                     discarded = 0
                     while not self._state.audio_out_queue.empty():
                         try:
@@ -861,29 +926,28 @@ class VoicePipeline:
                             discarded += 1
                         except asyncio.QueueEmpty:
                             break
+
+                    # Advance the turn counter so any in-flight synthesis tasks
+                    # that complete after this drain are discarded by
+                    # _await_and_enqueue.  Only increment here if _llm_worker
+                    # has NOT already done so for this interrupt (text barge-in
+                    # path increments in _llm_worker before reaching here).
+                    if not self._llm_claimed_interrupt:
+                        self._current_turn_id += 1
+                    self._llm_claimed_interrupt = False
+
                     pipeline_event("AUDIO_OUT", "interrupt_flush",
                                    session=sid,
                                    turn_id=self._ic.current_turn_id,
                                    discarded_chunks=discarded)
-                    # Reset per-turn counters
+
+                    # Reset per-turn counters and clear the interrupt flag.
                     first_chunk = True
                     self._turn_audio_duration_ms = 0
                     self._tts_turn_complete = False
                     self._state.interrupt = False
-                    # Transition to listening with up to 3 retries
-                    for attempt in range(3):
-                        try:
-                            await self._set_state("listening")
-                            break
-                        except Exception as exc:
-                            if attempt < 2:
-                                await asyncio.sleep(0.05)
-                            else:
-                                logger.error(
-                                    "AUDIO_OUT: failed to set listening state after 3 attempts: %s",
-                                    exc,
-                                )
-                    self._ic.begin_turn()
+
+                    await self._set_state("listening")
                     continue
 
                 try:

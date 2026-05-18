@@ -93,6 +93,7 @@ async def main() -> None:
         server_url=server_url,
         on_audio=_on_audio,
         on_status=_on_status,
+        on_interrupt=audio_playback.interrupt,
     )
 
     # SileroVAD — voice activity detection; callbacks wired below
@@ -104,7 +105,7 @@ async def main() -> None:
 
     def _on_barge_in() -> None:
         """Stop local audio immediately, then send interrupt to server."""
-        audio_playback.stop()   # synchronous — stops sounddevice immediately
+        audio_playback.interrupt()  # drain queue + stop stream, loop stays alive
         loop.call_soon_threadsafe(
             lambda: asyncio.ensure_future(ws_client.send_interrupt())
         )

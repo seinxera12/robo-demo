@@ -30,15 +30,29 @@ if not exist "venv\Scripts\python.exe" (
     exit /b 1
 )
 
-REM ── Use PowerShell to manage processes with proper cleanup on Ctrl+C ──────────
-echo.
-echo [*] Starting Lightweight Voice Demo...
-echo     Press Ctrl+C to stop all processes.
-echo.
-
+REM ── Hand off entirely to PowerShell (log rotation + process management) ──────
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$ErrorActionPreference = 'Stop';" ^
     "$serverProc = $null; $clientProc = $null;" ^
+    "Write-Host '';" ^
+    "Write-Host '[*] Rotating logs...';" ^
+    "if (Test-Path 'logging') {" ^
+    "  $ts = Get-Date -Format 'yyyyMMdd_HHmmss';" ^
+    "  $dest = \"logs_permanent\$ts\";" ^
+    "  if (-not (Test-Path 'logs_permanent')) { New-Item -ItemType Directory -Path 'logs_permanent' | Out-Null }" ^
+    "  Copy-Item -Recurse -Path 'logging' -Destination $dest;" ^
+    "  Get-ChildItem -Path 'logging' -Filter '*.log' | ForEach-Object { Clear-Content $_.FullName };" ^
+    "  Write-Host \"    Backed up to $dest\";" ^
+    "  Write-Host '    Logs cleared.';" ^
+    "} else {" ^
+    "  New-Item -ItemType Directory -Path 'logging' | Out-Null;" ^
+    "  Write-Host '    logging\ folder created.';" ^
+    "}" ^
+    "Write-Host '';" ^
     "try {" ^
+    "  Write-Host '[*] Starting Lightweight Voice Demo...';" ^
+    "  Write-Host '    Press Ctrl+C to stop all processes.';" ^
+    "  Write-Host '';" ^
     "  Write-Host '[*] Starting server on http://localhost:8000 ...';" ^
     "  $serverProc = Start-Process -FilePath 'venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','server.main:app','--host','0.0.0.0','--port','8000' -PassThru -NoNewWindow;" ^
     "  Start-Sleep -Seconds 3;" ^
@@ -62,4 +76,3 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
     "  if ($serverProc -and -not $serverProc.HasExited) { $serverProc.Kill(); Write-Host '    Server stopped.' }" ^
     "  Write-Host '[*] Done.';" ^
     "}"
-

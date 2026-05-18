@@ -3,7 +3,7 @@
 
 # Logs
 logging/
-logs_permanent/
+logs_permanent
 
 # Python virtual environment
 venv/

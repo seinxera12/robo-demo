@@ -1,0 +1,125 @@
+2026-05-18 16:01:01 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:01:02 | first_token  latency_ms=343
+2026-05-18 16:01:02 | stream_done  tokens=58  total_ms=484
+2026-05-18 16:01:02 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:01:02 | first_token  latency_ms=140
+2026-05-18 16:01:02 | stream_done  tokens=9  total_ms=172
+2026-05-18 16:01:02 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:01:02 | first_token  latency_ms=359
+2026-05-18 16:01:02 | stream_done  tokens=56  total_ms=468
+2026-05-18 16:01:02 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:01:03 | first_token  latency_ms=250
+2026-05-18 16:01:03 | stream_done  tokens=56  total_ms=390
+2026-05-18 16:01:03 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:01:03 | first_token  latency_ms=264
+2026-05-18 16:01:03 | stream_done  tokens=56  total_ms=406
+2026-05-18 16:01:13 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:01:13 | first_token  latency_ms=484
+2026-05-18 16:01:13 | stream_done  tokens=56  total_ms=561
+2026-05-18 16:01:13 | stream_start  model=llama-3.3-70b-versatile  messages=10  user_turns=5
+2026-05-18 16:01:14 | first_token  latency_ms=609
+2026-05-18 16:01:14 | stream_done  tokens=18  total_ms=625
+2026-05-18 16:23:30 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:30 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:30 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:30 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:30 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:30 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:30 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:30 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:38 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:39 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:39 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:39 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:39 | stream_start  model=llama-3.3-70b-versatile  messages=4  user_turns=2
+2026-05-18 16:23:39 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:39 | stream_start  model=llama-3.3-70b-versatile  messages=4  user_turns=2
+2026-05-18 16:23:39 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:55 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:55 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:55 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:55 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:55 | stream_start  model=llama-3.3-70b-versatile  messages=6  user_turns=3
+2026-05-18 16:23:55 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:55 | stream_start  model=llama-3.3-70b-versatile  messages=6  user_turns=3
+2026-05-18 16:23:55 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:59 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:59 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:23:59 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:23:59 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:23:59 | stream_start  model=llama-3.3-70b-versatile  messages=8  user_turns=4
+2026-05-18 16:24:00 | primary_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}  trying_fallback=true
+2026-05-18 16:24:00 | stream_start  model=llama-3.3-70b-versatile  messages=8  user_turns=4
+2026-05-18 16:24:00 | fallback_failed  error=Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}
+2026-05-18 16:27:07 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:27:07 | first_token  latency_ms=515
+2026-05-18 16:27:07 | stream_done  tokens=56  total_ms=625
+2026-05-18 16:27:07 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:27:07 | first_token  latency_ms=313
+2026-05-18 16:27:07 | stream_done  tokens=9  total_ms=313
+2026-05-18 16:27:25 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:27:25 | first_token  latency_ms=327
+2026-05-18 16:27:25 | stream_done  tokens=60  total_ms=405
+2026-05-18 16:27:25 | stream_start  model=llama-3.3-70b-versatile  messages=4  user_turns=2
+2026-05-18 16:27:25 | first_token  latency_ms=422
+2026-05-18 16:27:27 | stream_done  tokens=46  total_ms=1594
+2026-05-18 16:27:36 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:27:36 | first_token  latency_ms=313
+2026-05-18 16:27:36 | stream_done  tokens=56  total_ms=422
+2026-05-18 16:27:36 | stream_start  model=llama-3.3-70b-versatile  messages=6  user_turns=3
+2026-05-18 16:27:36 | first_token  latency_ms=390
+2026-05-18 16:27:37 | stream_done  tokens=37  total_ms=561
+2026-05-18 16:53:28 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:53:28 | first_token  latency_ms=312
+2026-05-18 16:53:29 | stream_done  tokens=58  total_ms=422
+2026-05-18 16:53:29 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:53:29 | first_token  latency_ms=436
+2026-05-18 16:53:29 | stream_done  tokens=9  total_ms=452
+2026-05-18 16:53:44 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:53:45 | first_token  latency_ms=952
+2026-05-18 16:53:45 | stream_done  tokens=60  total_ms=1000
+2026-05-18 16:53:48 | stream_start  model=llama-3.3-70b-versatile  messages=4  user_turns=2
+2026-05-18 16:53:48 | first_token  latency_ms=296
+2026-05-18 16:53:48 | stream_done  tokens=42  total_ms=436
+2026-05-18 16:54:24 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:54:24 | first_token  latency_ms=514
+2026-05-18 16:54:24 | stream_done  tokens=60  total_ms=655
+2026-05-18 16:54:24 | stream_start  model=llama-3.3-70b-versatile  messages=6  user_turns=3
+2026-05-18 16:54:25 | first_token  latency_ms=281
+2026-05-18 16:54:25 | stream_done  tokens=35  total_ms=344
+2026-05-18 16:58:02 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:58:02 | first_token  latency_ms=329
+2026-05-18 16:58:02 | stream_done  tokens=57  total_ms=422
+2026-05-18 16:58:02 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 16:58:02 | first_token  latency_ms=453
+2026-05-18 16:58:02 | stream_done  tokens=9  total_ms=469
+2026-05-18 17:02:28 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 17:02:28 | first_token  latency_ms=422
+2026-05-18 17:02:28 | stream_done  tokens=56  total_ms=514
+2026-05-18 17:02:28 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 17:02:29 | first_token  latency_ms=454
+2026-05-18 17:02:29 | stream_done  tokens=21  total_ms=516
+2026-05-18 17:03:01 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 17:03:01 | first_token  latency_ms=329
+2026-05-18 17:03:02 | stream_done  tokens=60  total_ms=407
+2026-05-18 17:03:04 | stream_start  model=llama-3.3-70b-versatile  messages=4  user_turns=2
+2026-05-18 17:03:04 | first_token  latency_ms=577
+2026-05-18 17:03:04 | stream_done  tokens=50  total_ms=750
+2026-05-18 17:04:16 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 17:04:16 | first_token  latency_ms=515
+2026-05-18 17:04:16 | stream_done  tokens=61  total_ms=640
+2026-05-18 17:04:18 | stream_start  model=llama-3.3-70b-versatile  messages=6  user_turns=3
+2026-05-18 17:04:19 | first_token  latency_ms=344
+2026-05-18 17:04:19 | stream_done  tokens=32  total_ms=485
+2026-05-18 17:06:02 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 17:06:03 | first_token  latency_ms=390
+2026-05-18 17:06:03 | stream_done  tokens=60  total_ms=469
+2026-05-18 17:06:03 | stream_start  model=llama-3.3-70b-versatile  messages=8  user_turns=4
+2026-05-18 17:06:03 | first_token  latency_ms=265
+2026-05-18 17:06:04 | stream_done  tokens=185  total_ms=1077
+2026-05-18 17:06:10 | stream_start  model=llama-3.3-70b-versatile  messages=2  user_turns=1
+2026-05-18 17:06:10 | first_token  latency_ms=344
+2026-05-18 17:06:11 | stream_done  tokens=56  total_ms=438
+2026-05-18 17:06:11 | stream_start  model=llama-3.3-70b-versatile  messages=10  user_turns=5
+2026-05-18 17:06:11 | first_token  latency_ms=327
+2026-05-18 17:06:11 | stream_done  tokens=17  total_ms=360
