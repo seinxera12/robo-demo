@@ -104,7 +104,7 @@ export default function App() {
       />
 
       {/* Text input */}
-      <TextInput onSend={sendTextInput} />
+      <TextInput onSend={sendTextInput} disabled={pipelineState === 'thinking'} />
     </div>
   );
 }

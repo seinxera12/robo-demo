@@ -32,6 +32,9 @@ class WSClient:
         on_audio:    Callback invoked with WAV bytes when a binary frame is received.
         on_status:   Callback invoked with a state string when a status JSON message
                      is received (e.g. ``"listening"``, ``"thinking"``, ``"speaking"``).
+        on_interrupt: Optional callback invoked when the server transitions from
+                      ``"speaking"`` to ``"listening"`` mid-turn (barge-in interrupt).
+                      Used to stop local audio playback immediately.
     """
 
     def __init__(
@@ -39,12 +42,15 @@ class WSClient:
         server_url: str,
         on_audio: Callable[[bytes], None],
         on_status: Callable[[str], None],
+        on_interrupt: Callable[[], None] | None = None,
     ) -> None:
         self._server_url = server_url
         self._on_audio = on_audio
         self._on_status = on_status
+        self._on_interrupt = on_interrupt
         self._ws = None  # active websockets connection
         self._running: bool = True  # set to False to stop the run() loop
+        self._last_state: str = ""  # track previous state to detect speaking→listening
 
     # ------------------------------------------------------------------
     # Public API
@@ -172,6 +178,14 @@ class WSClient:
         if msg_type == "status":
             state = msg.get("state", "")
             logger.debug("WSClient received status: %s", state)
+            # Detect a server-side barge-in interrupt: speaking → listening.
+            # This happens when the server interrupts TTS due to new text input.
+            # Fire on_interrupt so the client can stop local audio playback immediately.
+            if state == "listening" and self._last_state == "speaking":
+                logger.debug("WSClient detected speaking→listening interrupt — stopping playback.")
+                if self._on_interrupt is not None:
+                    self._on_interrupt()
+            self._last_state = state
             self._on_status(state)
         else:
             # Log other message types at debug level; they are not consumed here

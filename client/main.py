@@ -91,6 +91,7 @@ async def main() -> None:
         server_url=server_url,
         on_audio=_on_audio,
         on_status=_on_status,
+        on_interrupt=audio_playback.stop,
     )
 
     # SileroVAD — voice activity detection; callbacks wired below

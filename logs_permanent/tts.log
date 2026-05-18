@@ -1,0 +1,299 @@
+2026-05-18 16:00:48 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 16:00:48 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:00:52 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:00:52 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha
+2026-05-18 16:00:53 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 16:00:53 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 16:01:02 | route  text='Hello, how can I help you today?'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:06 | synthesised  engine=KokoroTTS  text='Hello, how can I help you today?'  wav_bytes=111644  synthesis_ms=3577  audio_duration_ms=2325
+2026-05-18 16:01:06 | synthesised  session=2f4050bd  sentence_index=0  sentence='Hello, how can I help you today?'  wav_bytes=111644  synth_ms=3577
+2026-05-18 16:01:06 | first_chunk_sent  session=2f4050bd  ttfa_ms=2702  wav_bytes=111644
+2026-05-18 16:01:06 | route  text="I'm sorry,"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:06 | chunk_sent  session=2f4050bd  wav_bytes=111644
+2026-05-18 16:01:06 | route  text="I didn't quite understand that. Could yo"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:07 | synthesised  engine=KokoroTTS  text="I'm sorry,"  wav_bytes=72044  synthesis_ms=1781  audio_duration_ms=1500
+2026-05-18 16:01:07 | synthesised  session=2f4050bd  sentence_index=0  sentence="I'm sorry,"  wav_bytes=72044  synth_ms=1781
+2026-05-18 16:01:07 | chunk_sent  session=2f4050bd  wav_bytes=72044
+2026-05-18 16:01:09 | synthesised  engine=KokoroTTS  text="I didn't quite understand that. Could you please rephrase?"  wav_bytes=172844  synthesis_ms=3843  audio_duration_ms=3600
+2026-05-18 16:01:09 | synthesised  session=2f4050bd  sentence_index=1  sentence="I didn't quite understand that. Could you please rephrase?"  wav_bytes=172844  synth_ms=3843
+2026-05-18 16:01:09 | chunk_sent  session=2f4050bd  wav_bytes=172844
+2026-05-18 16:01:09 | route  text="I'm sorry,"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:09 | route  text="I didn't quite understand that. Could yo"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:11 | synthesised  engine=KokoroTTS  text="I'm sorry,"  wav_bytes=72044  synthesis_ms=1656  audio_duration_ms=1500
+2026-05-18 16:01:11 | synthesised  session=2f4050bd  sentence_index=0  sentence="I'm sorry,"  wav_bytes=72044  synth_ms=1656
+2026-05-18 16:01:11 | chunk_sent  session=2f4050bd  wav_bytes=72044
+2026-05-18 16:01:13 | synthesised  engine=KokoroTTS  text="I didn't quite understand that. Could you please rephrase?"  wav_bytes=172844  synthesis_ms=3422  audio_duration_ms=3600
+2026-05-18 16:01:13 | synthesised  session=2f4050bd  sentence_index=1  sentence="I didn't quite understand that. Could you please rephrase?"  wav_bytes=172844  synth_ms=3422
+2026-05-18 16:01:13 | route  text="I'm sorry,"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:13 | route  text="I didn't quite understand that. Could yo"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:13 | first_chunk_sent  session=2f4050bd  ttfa_ms=155  wav_bytes=172844
+2026-05-18 16:01:13 | chunk_sent  session=2f4050bd  wav_bytes=172844
+2026-05-18 16:01:15 | synthesised  engine=KokoroTTS  text="I'm sorry,"  wav_bytes=72044  synthesis_ms=1952  audio_duration_ms=1500
+2026-05-18 16:01:15 | synthesised  session=2f4050bd  sentence_index=0  sentence="I'm sorry,"  wav_bytes=72044  synth_ms=1952
+2026-05-18 16:01:15 | chunk_sent  session=2f4050bd  wav_bytes=72044
+2026-05-18 16:01:17 | synthesised  engine=KokoroTTS  text="I didn't quite understand that. Could you please rephrase?"  wav_bytes=172844  synthesis_ms=4077  audio_duration_ms=3600
+2026-05-18 16:01:17 | synthesised  session=2f4050bd  sentence_index=1  sentence="I didn't quite understand that. Could you please rephrase?"  wav_bytes=172844  synth_ms=4077
+2026-05-18 16:01:17 | chunk_sent  session=2f4050bd  wav_bytes=172844
+2026-05-18 16:01:17 | route  text='Hello again,'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:17 | route  text='is there something I can help you with o'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:01:19 | synthesised  engine=KokoroTTS  text='Hello again,'  wav_bytes=75644  synthesis_ms=1734  audio_duration_ms=1575
+2026-05-18 16:01:19 | synthesised  session=2f4050bd  sentence_index=0  sentence='Hello again,'  wav_bytes=75644  synth_ms=1734
+2026-05-18 16:01:19 | chunk_sent  session=2f4050bd  wav_bytes=75644
+2026-05-18 16:01:20 | synthesised  engine=KokoroTTS  text='is there something I can help you with or would you like to chat?'  wav_bytes=183644  synthesis_ms=2921  audio_duration_ms=3825
+2026-05-18 16:01:20 | synthesised  session=2f4050bd  sentence_index=1  sentence='is there something I can help you with or would you like to '  wav_bytes=183644  synth_ms=2938
+2026-05-18 16:01:20 | chunk_sent  session=2f4050bd  wav_bytes=183644
+2026-05-18 16:01:34 | playback_complete  session=2f4050bd  audio_duration_ms=14100  waited_ms=14405
+2026-05-18 16:23:23 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 16:23:23 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:23:26 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 16:23:26 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:23:26 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 16:23:26 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha
+2026-05-18 16:23:30 | route  text="I'm having trouble connecting right now."  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:23:30 | route  text='Please try again in a moment.'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:23:33 | synthesised  engine=KokoroTTS  text='Please try again in a moment.'  wav_bytes=102044  synthesis_ms=2953  audio_duration_ms=2125
+2026-05-18 16:23:33 | synthesised  session=6a237c2b  sentence_index=1  sentence='Please try again in a moment.'  wav_bytes=102044  synth_ms=2953
+2026-05-18 16:23:33 | synthesised  engine=KokoroTTS  text="I'm having trouble connecting right now."  wav_bytes=129644  synthesis_ms=3000  audio_duration_ms=2700
+2026-05-18 16:23:33 | synthesised  session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_bytes=129644  synth_ms=3000
+2026-05-18 16:23:33 | first_chunk_sent  session=6a237c2b  ttfa_ms=3531  wav_bytes=129644
+2026-05-18 16:23:33 | chunk_sent  session=6a237c2b  wav_bytes=129644
+2026-05-18 16:23:33 | chunk_sent  session=6a237c2b  wav_bytes=102044
+2026-05-18 16:23:39 | route  text="I'm having trouble connecting right now."  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:23:39 | route  text='Please try again in a moment.'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:23:40 | synthesised  engine=KokoroTTS  text='Please try again in a moment.'  wav_bytes=102044  synthesis_ms=1375  audio_duration_ms=2125
+2026-05-18 16:23:40 | synthesised  session=6a237c2b  sentence_index=1  sentence='Please try again in a moment.'  wav_bytes=102044  synth_ms=1375
+2026-05-18 16:23:40 | synthesised  engine=KokoroTTS  text="I'm having trouble connecting right now."  wav_bytes=129644  synthesis_ms=1469  audio_duration_ms=2700
+2026-05-18 16:23:40 | synthesised  session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_bytes=129644  synth_ms=1469
+2026-05-18 16:23:40 | first_chunk_sent  session=6a237c2b  ttfa_ms=1906  wav_bytes=129644
+2026-05-18 16:23:40 | chunk_sent  session=6a237c2b  wav_bytes=129644
+2026-05-18 16:23:40 | chunk_sent  session=6a237c2b  wav_bytes=102044
+2026-05-18 16:23:46 | playback_complete  session=6a237c2b  audio_duration_ms=4825  waited_ms=5186
+2026-05-18 16:23:55 | route  text="I'm having trouble connecting right now."  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:23:55 | route  text='Please try again in a moment.'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:23:57 | synthesised  engine=KokoroTTS  text='Please try again in a moment.'  wav_bytes=102044  synthesis_ms=2219  audio_duration_ms=2125
+2026-05-18 16:23:57 | synthesised  session=6a237c2b  sentence_index=1  sentence='Please try again in a moment.'  wav_bytes=102044  synth_ms=2219
+2026-05-18 16:23:58 | synthesised  engine=KokoroTTS  text="I'm having trouble connecting right now."  wav_bytes=129644  synthesis_ms=2750  audio_duration_ms=2700
+2026-05-18 16:23:58 | synthesised  session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_bytes=129644  synth_ms=2750
+2026-05-18 16:23:58 | first_chunk_sent  session=6a237c2b  ttfa_ms=3218  wav_bytes=129644
+2026-05-18 16:23:58 | chunk_sent  session=6a237c2b  wav_bytes=129644
+2026-05-18 16:23:58 | chunk_sent  session=6a237c2b  wav_bytes=102044
+2026-05-18 16:24:00 | route  text="I'm having trouble connecting right now."  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:24:00 | route  text='Please try again in a moment.'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:24:02 | synthesised  engine=KokoroTTS  text='Please try again in a moment.'  wav_bytes=102044  synthesis_ms=2702  audio_duration_ms=2125
+2026-05-18 16:24:02 | synthesised  session=6a237c2b  sentence_index=1  sentence='Please try again in a moment.'  wav_bytes=102044  synth_ms=2702
+2026-05-18 16:24:03 | synthesised  engine=KokoroTTS  text="I'm having trouble connecting right now."  wav_bytes=129644  synthesis_ms=2890  audio_duration_ms=2700
+2026-05-18 16:24:03 | synthesised  session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_bytes=129644  synth_ms=2890
+2026-05-18 16:24:03 | first_chunk_sent  session=6a237c2b  ttfa_ms=3250  wav_bytes=129644
+2026-05-18 16:24:03 | chunk_sent  session=6a237c2b  wav_bytes=129644
+2026-05-18 16:24:03 | chunk_sent  session=6a237c2b  wav_bytes=102044
+2026-05-18 16:24:08 | playback_complete  session=6a237c2b  audio_duration_ms=4825  waited_ms=5125
+2026-05-18 16:26:45 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 16:26:45 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:26:50 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 16:26:50 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:26:50 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 16:26:51 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha
+2026-05-18 16:27:08 | route  text='Hello, how can I help you today?'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:12 | synthesised  engine=KokoroTTS  text='Hello, how can I help you today?'  wav_bytes=111644  synthesis_ms=4656  audio_duration_ms=2325
+2026-05-18 16:27:12 | synthesised  session=d4fa5931  sentence_index=0  sentence='Hello, how can I help you today?'  wav_bytes=111644  synth_ms=4671
+2026-05-18 16:27:12 | first_chunk_sent  session=d4fa5931  ttfa_ms=5609  wav_bytes=111644
+2026-05-18 16:27:12 | chunk_sent  session=d4fa5931  wav_bytes=111644
+2026-05-18 16:27:15 | playback_complete  session=d4fa5931  audio_duration_ms=2325  waited_ms=2702
+2026-05-18 16:27:26 | route  text="I'd be happy to tell you a story."  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:26 | route  text='Once upon a time,'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:29 | synthesised  engine=KokoroTTS  text="I'd be happy to tell you a story."  wav_bytes=112844  synthesis_ms=2171  audio_duration_ms=2350
+2026-05-18 16:27:29 | synthesised  session=d4fa5931  sentence_index=0  sentence="I'd be happy to tell you a story."  wav_bytes=112844  synth_ms=2171
+2026-05-18 16:27:29 | route  text='in a small village,'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:29 | first_chunk_sent  session=d4fa5931  ttfa_ms=4030  wav_bytes=112844
+2026-05-18 16:27:29 | chunk_sent  session=d4fa5931  wav_bytes=112844
+2026-05-18 16:27:29 | synthesised  engine=KokoroTTS  text='Once upon a time,'  wav_bytes=87644  synthesis_ms=2250  audio_duration_ms=1825
+2026-05-18 16:27:29 | synthesised  session=d4fa5931  sentence_index=1  sentence='Once upon a time,'  wav_bytes=87644  synth_ms=2264
+2026-05-18 16:27:29 | route  text='there was a little rabbit who loved to e'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:29 | chunk_sent  session=d4fa5931  wav_bytes=87644
+2026-05-18 16:27:31 | synthesised  engine=KokoroTTS  text='in a small village,'  wav_bytes=84044  synthesis_ms=1953  audio_duration_ms=1750
+2026-05-18 16:27:31 | synthesised  session=d4fa5931  sentence_index=2  sentence='in a small village,'  wav_bytes=84044  synth_ms=1953
+2026-05-18 16:27:31 | route  text='Would you like to hear more about what t'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:31 | chunk_sent  session=d4fa5931  wav_bytes=84044
+2026-05-18 16:27:32 | synthesised  engine=KokoroTTS  text='there was a little rabbit who loved to explore and go on adventures.'  wav_bytes=201644  synthesis_ms=3641  audio_duration_ms=4200
+2026-05-18 16:27:32 | synthesised  session=d4fa5931  sentence_index=3  sentence='there was a little rabbit who loved to explore and go on adv'  wav_bytes=201644  synth_ms=3641
+2026-05-18 16:27:32 | chunk_sent  session=d4fa5931  wav_bytes=201644
+2026-05-18 16:27:34 | synthesised  engine=KokoroTTS  text='Would you like to hear more about what the rabbit did?'  wav_bytes=153644  synthesis_ms=3202  audio_duration_ms=3200
+2026-05-18 16:27:34 | synthesised  session=d4fa5931  sentence_index=4  sentence='Would you like to hear more about what the rabbit did?'  wav_bytes=153644  synth_ms=3202
+2026-05-18 16:27:34 | chunk_sent  session=d4fa5931  wav_bytes=153644
+2026-05-18 16:27:37 | route  text="We already said hello, didn't we?"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:37 | route  text='You asked me to tell you a story,'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:39 | synthesised  engine=KokoroTTS  text="We already said hello, didn't we?"  wav_bytes=111644  synthesis_ms=2577  audio_duration_ms=2325
+2026-05-18 16:27:39 | synthesised  session=d4fa5931  sentence_index=0  sentence="We already said hello, didn't we?"  wav_bytes=111644  synth_ms=2577
+2026-05-18 16:27:39 | route  text='and I started telling you about a little'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:27:39 | first_chunk_sent  session=d4fa5931  ttfa_ms=3422  wav_bytes=111644
+2026-05-18 16:27:39 | chunk_sent  session=d4fa5931  wav_bytes=111644
+2026-05-18 16:27:39 | synthesised  engine=KokoroTTS  text='You asked me to tell you a story,'  wav_bytes=109244  synthesis_ms=2734  audio_duration_ms=2275
+2026-05-18 16:27:39 | synthesised  session=d4fa5931  sentence_index=1  sentence='You asked me to tell you a story,'  wav_bytes=109244  synth_ms=2734
+2026-05-18 16:27:39 | chunk_sent  session=d4fa5931  wav_bytes=109244
+2026-05-18 16:27:44 | synthesised  engine=KokoroTTS  text='and I started telling you about a little rabbit would you like me to continue wi'  wav_bytes=238844  synthesis_ms=4797  audio_duration_ms=4975
+2026-05-18 16:27:44 | synthesised  session=d4fa5931  sentence_index=2  sentence='and I started telling you about a little rabbit would you li'  wav_bytes=238844  synth_ms=4797
+2026-05-18 16:27:44 | chunk_sent  session=d4fa5931  wav_bytes=238844
+2026-05-18 16:27:54 | playback_complete  session=d4fa5931  audio_duration_ms=9575  waited_ms=9968
+2026-05-18 16:51:20 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 16:51:20 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:51:25 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 16:51:25 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:51:25 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 16:51:25 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha
+2026-05-18 16:53:29 | route  text='Hello, how can I help you today?'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:53:33 | synthesised  engine=KokoroTTS  text='Hello, how can I help you today?'  wav_bytes=111644  synthesis_ms=4297  audio_duration_ms=2325
+2026-05-18 16:53:33 | synthesised  session=c02b4546  sentence_index=0  sentence='Hello, how can I help you today?'  wav_bytes=111644  synth_ms=4297
+2026-05-18 16:53:33 | first_chunk_sent  session=c02b4546  ttfa_ms=5187  wav_bytes=111644
+2026-05-18 16:53:33 | chunk_sent  session=c02b4546  wav_bytes=111644
+2026-05-18 16:53:36 | playback_complete  session=c02b4546  audio_duration_ms=2325  waited_ms=2640
+2026-05-18 16:53:48 | route  text='In Kathmandu right now,'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:53:48 | route  text="it's partly cloudy with a temperature of"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:53:50 | synthesised  engine=KokoroTTS  text='In Kathmandu right now,'  wav_bytes=96044  synthesis_ms=2454  audio_duration_ms=2000
+2026-05-18 16:53:50 | synthesised  session=c02b4546  sentence_index=0  sentence='In Kathmandu right now,'  wav_bytes=96044  synth_ms=2454
+2026-05-18 16:53:50 | route  text='or 83 degrees Fahrenheit.'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:53:50 | first_chunk_sent  session=c02b4546  ttfa_ms=6296  wav_bytes=96044
+2026-05-18 16:53:50 | chunk_sent  session=c02b4546  wav_bytes=96044
+2026-05-18 16:53:52 | synthesised  engine=KokoroTTS  text="it's partly cloudy with a temperature of around 28 degrees Celsius,"  wav_bytes=212444  synthesis_ms=4171  audio_duration_ms=4425
+2026-05-18 16:53:52 | synthesised  session=c02b4546  sentence_index=1  sentence="it's partly cloudy with a temperature of around 28 degrees C"  wav_bytes=212444  synth_ms=4171
+2026-05-18 16:53:52 | route  text='Would you like to know more about the cu'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:53:52 | chunk_sent  session=c02b4546  wav_bytes=212444
+2026-05-18 16:53:53 | synthesised  engine=KokoroTTS  text='or 83 degrees Fahrenheit.'  wav_bytes=116444  synthesis_ms=2609  audio_duration_ms=2425
+2026-05-18 16:53:53 | synthesised  session=c02b4546  sentence_index=2  sentence='or 83 degrees Fahrenheit.'  wav_bytes=116444  synth_ms=2609
+2026-05-18 16:53:53 | chunk_sent  session=c02b4546  wav_bytes=116444
+2026-05-18 16:53:56 | synthesised  engine=KokoroTTS  text='Would you like to know more about the current weather conditions or the forecast'  wav_bytes=218444  synthesis_ms=3594  audio_duration_ms=4550
+2026-05-18 16:53:56 | synthesised  session=c02b4546  sentence_index=3  sentence='Would you like to know more about the current weather condit'  wav_bytes=218444  synth_ms=3594
+2026-05-18 16:53:56 | chunk_sent  session=c02b4546  wav_bytes=218444
+2026-05-18 16:54:25 | route  text="I don't have realtime access to the curr"  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:54:25 | route  text='I can suggest checking a weather website'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:54:29 | synthesised  engine=KokoroTTS  text="I don't have realtime access to the current weather in Kathmandu."  wav_bytes=198044  synthesis_ms=4046  audio_duration_ms=4125
+2026-05-18 16:54:29 | synthesised  session=c02b4546  sentence_index=0  sentence="I don't have realtime access to the current weather in Kathm"  wav_bytes=198044  synth_ms=4062
+2026-05-18 16:54:29 | route  text='though.'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:54:29 | first_chunk_sent  session=c02b4546  ttfa_ms=5030  wav_bytes=198044
+2026-05-18 16:54:29 | chunk_sent  session=c02b4546  wav_bytes=198044
+2026-05-18 16:54:29 | synthesised  engine=KokoroTTS  text='I can suggest checking a weather website or app for the most uptodate informatio'  wav_bytes=256844  synthesis_ms=4389  audio_duration_ms=5350
+2026-05-18 16:54:29 | synthesised  session=c02b4546  sentence_index=1  sentence='I can suggest checking a weather website or app for the most'  wav_bytes=256844  synth_ms=4389
+2026-05-18 16:54:29 | chunk_sent  session=c02b4546  wav_bytes=256844
+2026-05-18 16:54:29 | synthesised  engine=KokoroTTS  text='though.'  wav_bytes=57644  synthesis_ms=625  audio_duration_ms=1200
+2026-05-18 16:54:29 | synthesised  session=c02b4546  sentence_index=2  sentence='though.'  wav_bytes=57644  synth_ms=625
+2026-05-18 16:54:29 | chunk_sent  session=c02b4546  wav_bytes=57644
+2026-05-18 16:54:40 | playback_complete  session=c02b4546  audio_duration_ms=10675  waited_ms=11014
+2026-05-18 16:57:23 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 16:57:23 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:57:26 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 16:57:27 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha
+2026-05-18 16:57:28 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 16:57:28 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 16:58:02 | route  text='Hello, how can I help you today?'  passed_lang=en  effective_lang=en  engine=KokoroTTS
+2026-05-18 16:58:07 | synthesised  engine=KokoroTTS  text='Hello, how can I help you today?'  wav_bytes=111644  synthesis_ms=4264  audio_duration_ms=2325
+2026-05-18 16:58:07 | synthesised  session=a7de1e7c  sentence_index=0  sentence='Hello, how can I help you today?'  wav_bytes=111644  synth_ms=4264
+2026-05-18 16:58:07 | first_chunk_sent  session=a7de1e7c  ttfa_ms=5172  wav_bytes=111644
+2026-05-18 16:58:07 | chunk_sent  session=a7de1e7c  wav_bytes=111644
+2026-05-18 16:58:09 | playback_complete  session=a7de1e7c  audio_duration_ms=2325  waited_ms=2625
+2026-05-18 17:02:13 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 17:02:13 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 17:02:17 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 17:02:17 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha
+2026-05-18 17:02:18 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 17:02:18 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 17:02:29 | route  text='こんにちは。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:02:29 | route  text='今日はどうしましたか？'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:02:31 | synthesised  engine=KokoroJapaneseTTS  text='こんにちは。'  wav_bytes=86444  synthesis_ms=2203  audio_duration_ms=1800
+2026-05-18 17:02:31 | synthesised  session=2b9b6c5b  sentence_index=0  sentence='こんにちは。'  wav_bytes=86444  synth_ms=2203
+2026-05-18 17:02:31 | route  text='何かお手伝いできるところはありますか？'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:02:31 | first_chunk_sent  session=2b9b6c5b  ttfa_ms=3172  wav_bytes=86444
+2026-05-18 17:02:31 | chunk_sent  session=2b9b6c5b  wav_bytes=86444
+2026-05-18 17:02:31 | synthesised  engine=KokoroJapaneseTTS  text='今日はどうしましたか？'  wav_bytes=114044  synthesis_ms=2531  audio_duration_ms=2375
+2026-05-18 17:02:31 | synthesised  session=2b9b6c5b  sentence_index=1  sentence='今日はどうしましたか？'  wav_bytes=114044  synth_ms=2562
+2026-05-18 17:02:31 | chunk_sent  session=2b9b6c5b  wav_bytes=114044
+2026-05-18 17:02:34 | synthesised  engine=KokoroJapaneseTTS  text='何かお手伝いできるところはありますか？'  wav_bytes=166844  synthesis_ms=3686  audio_duration_ms=3475
+2026-05-18 17:02:34 | synthesised  session=2b9b6c5b  sentence_index=2  sentence='何かお手伝いできるところはありますか？'  wav_bytes=166844  synth_ms=3686
+2026-05-18 17:02:34 | chunk_sent  session=2b9b6c5b  wav_bytes=166844
+2026-05-18 17:02:43 | playback_complete  session=2b9b6c5b  audio_duration_ms=7650  waited_ms=8030
+2026-05-18 17:03:04 | route  text='はい、東京の現在の天気を調べてみました。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:03:04 | route  text='現在、東京は晴れています。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:03:07 | synthesised  engine=KokoroJapaneseTTS  text='現在、東京は晴れています。'  wav_bytes=136844  synthesis_ms=2984  audio_duration_ms=2850
+2026-05-18 17:03:07 | synthesised  session=2b9b6c5b  sentence_index=1  sentence='現在、東京は晴れています。'  wav_bytes=136844  synth_ms=2984
+2026-05-18 17:03:08 | synthesised  engine=KokoroJapaneseTTS  text='はい、東京の現在の天気を調べてみました。'  wav_bytes=198044  synthesis_ms=3610  audio_duration_ms=4125
+2026-05-18 17:03:08 | synthesised  session=2b9b6c5b  sentence_index=0  sentence='はい、東京の現在の天気を調べてみました。'  wav_bytes=198044  synth_ms=3610
+2026-05-18 17:03:08 | route  text='気温は27.'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:03:08 | first_chunk_sent  session=2b9b6c5b  ttfa_ms=6625  wav_bytes=198044
+2026-05-18 17:03:08 | chunk_sent  session=2b9b6c5b  wav_bytes=198044
+2026-05-18 17:03:08 | route  text='6℃で、南南東の風が吹いています。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:03:08 | chunk_sent  session=2b9b6c5b  wav_bytes=136844
+2026-05-18 17:03:10 | synthesised  engine=KokoroJapaneseTTS  text='気温は27.'  wav_bytes=103244  synthesis_ms=2579  audio_duration_ms=2150
+2026-05-18 17:03:10 | synthesised  session=2b9b6c5b  sentence_index=2  sentence='気温は27.'  wav_bytes=103244  synth_ms=2579
+2026-05-18 17:03:10 | route  text='蒸し暑い感じがしますね。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:03:10 | chunk_sent  session=2b9b6c5b  wav_bytes=103244
+2026-05-18 17:03:11 | synthesised  engine=KokoroJapaneseTTS  text='6℃で、南南東の風が吹いています。'  wav_bytes=165644  synthesis_ms=3217  audio_duration_ms=3450
+2026-05-18 17:03:11 | synthesised  session=2b9b6c5b  sentence_index=3  sentence='6℃で、南南東の風が吹いています。'  wav_bytes=165644  synth_ms=3217
+2026-05-18 17:03:11 | chunk_sent  session=2b9b6c5b  wav_bytes=165644
+2026-05-18 17:03:13 | synthesised  engine=KokoroJapaneseTTS  text='蒸し暑い感じがしますね。'  wav_bytes=122444  synthesis_ms=2795  audio_duration_ms=2550
+2026-05-18 17:03:13 | synthesised  session=2b9b6c5b  sentence_index=4  sentence='蒸し暑い感じがしますね。'  wav_bytes=122444  synth_ms=2795
+2026-05-18 17:03:13 | chunk_sent  session=2b9b6c5b  wav_bytes=122444
+2026-05-18 17:03:29 | playback_complete  session=2b9b6c5b  audio_duration_ms=15125  waited_ms=15485
+2026-05-18 17:04:19 | route  text='現在の時刻は、米国時間で午前５時４９分です。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:04:19 | route  text='日本時間だと午後６時４９分になります。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:04:23 | synthesised  engine=KokoroJapaneseTTS  text='日本時間だと午後６時４９分になります。'  wav_bytes=211244  synthesis_ms=3811  audio_duration_ms=4400
+2026-05-18 17:04:23 | synthesised  session=2b9b6c5b  sentence_index=1  sentence='日本時間だと午後６時４９分になります。'  wav_bytes=211244  synth_ms=3811
+2026-05-18 17:04:23 | synthesised  engine=KokoroJapaneseTTS  text='現在の時刻は、米国時間で午前５時４９分です。'  wav_bytes=268844  synthesis_ms=4359  audio_duration_ms=5600
+2026-05-18 17:04:23 | synthesised  session=2b9b6c5b  sentence_index=0  sentence='現在の時刻は、米国時間で午前５時４９分です。'  wav_bytes=268844  synth_ms=4359
+2026-05-18 17:04:23 | first_chunk_sent  session=2b9b6c5b  ttfa_ms=7530  wav_bytes=268844
+2026-05-18 17:04:23 | chunk_sent  session=2b9b6c5b  wav_bytes=268844
+2026-05-18 17:04:23 | chunk_sent  session=2b9b6c5b  wav_bytes=211244
+2026-05-18 17:04:34 | playback_complete  session=2b9b6c5b  audio_duration_ms=10000  waited_ms=10358
+2026-05-18 17:06:03 | route  text='ある日、山の中でおじいさんが川で魚を釣っていました。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:03 | route  text='すると、突然大きな魚が釣れました。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:06 | synthesised  engine=KokoroJapaneseTTS  text='すると、突然大きな魚が釣れました。'  wav_bytes=180044  synthesis_ms=2921  audio_duration_ms=3750
+2026-05-18 17:06:06 | synthesised  session=2b9b6c5b  sentence_index=1  sentence='すると、突然大きな魚が釣れました。'  wav_bytes=180044  synth_ms=2921
+2026-05-18 17:06:07 | synthesised  engine=KokoroJapaneseTTS  text='ある日、山の中でおじいさんが川で魚を釣っていました。'  wav_bytes=235244  synthesis_ms=3546  audio_duration_ms=4900
+2026-05-18 17:06:07 | synthesised  session=2b9b6c5b  sentence_index=0  sentence='ある日、山の中でおじいさんが川で魚を釣っていました。'  wav_bytes=235244  synth_ms=3546
+2026-05-18 17:06:07 | route  text='おじいさんは大きな魚を釣ったことにも驚きながら、魚を川から上げようとしました。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:07 | first_chunk_sent  session=2b9b6c5b  ttfa_ms=4390  wav_bytes=235244
+2026-05-18 17:06:07 | chunk_sent  session=2b9b6c5b  wav_bytes=235244
+2026-05-18 17:06:07 | route  text='すると、魚はおじいさんに言ったのです。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:07 | chunk_sent  session=2b9b6c5b  wav_bytes=180044
+2026-05-18 17:06:09 | synthesised  engine=KokoroJapaneseTTS  text='すると、魚はおじいさんに言ったのです。'  wav_bytes=171644  synthesis_ms=2515  audio_duration_ms=3575
+2026-05-18 17:06:09 | synthesised  session=2b9b6c5b  sentence_index=3  sentence='すると、魚はおじいさんに言ったのです。'  wav_bytes=171644  synth_ms=2515
+2026-05-18 17:06:10 | synthesised  engine=KokoroJapaneseTTS  text='おじいさんは大きな魚を釣ったことにも驚きながら、魚を川から上げようとしました。'  wav_bytes=350444  synthesis_ms=3889  audio_duration_ms=7300
+2026-05-18 17:06:10 | synthesised  session=2b9b6c5b  sentence_index=2  sentence='おじいさんは大きな魚を釣ったことにも驚きながら、魚を川から上げようとしました。'  wav_bytes=350444  synth_ms=3889
+2026-05-18 17:06:10 | route  text='「おじいさん、私は魔法の魚です。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:10 | first_chunk_sent  session=2b9b6c5b  ttfa_ms=375  wav_bytes=350444
+2026-05-18 17:06:11 | chunk_sent  session=2b9b6c5b  wav_bytes=350444
+2026-05-18 17:06:11 | route  text='你の願いを一つ聞きます」おじいさんは驚きながら、思わず言ったのです。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:11 | chunk_sent  session=2b9b6c5b  wav_bytes=171644
+2026-05-18 17:06:13 | synthesised  engine=KokoroJapaneseTTS  text='「おじいさん、私は魔法の魚です。'  wav_bytes=166844  synthesis_ms=2780  audio_duration_ms=3475
+2026-05-18 17:06:13 | synthesised  session=2b9b6c5b  sentence_index=4  sentence='「おじいさん、私は魔法の魚です。'  wav_bytes=166844  synth_ms=2780
+2026-05-18 17:06:13 | route  text='「私には何も必要ない、魚を自由にしてください」そしておじいさんは魚を川に戻しまし'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:13 | chunk_sent  session=2b9b6c5b  wav_bytes=166844
+2026-05-18 17:06:15 | synthesised  engine=KokoroJapaneseTTS  text='你の願いを一つ聞きます」おじいさんは驚きながら、思わず言ったのです。'  wav_bytes=288044  synthesis_ms=4155  audio_duration_ms=6000
+2026-05-18 17:06:15 | synthesised  session=2b9b6c5b  sentence_index=5  sentence='你の願いを一つ聞きます」おじいさんは驚きながら、思わず言ったのです。'  wav_bytes=288044  synth_ms=4155
+2026-05-18 17:06:15 | route  text='魚はおじいさんに言ったのです。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:15 | chunk_sent  session=2b9b6c5b  wav_bytes=288044
+2026-05-18 17:06:18 | synthesised  engine=KokoroJapaneseTTS  text='魚はおじいさんに言ったのです。'  wav_bytes=144044  synthesis_ms=3046  audio_duration_ms=3000
+2026-05-18 17:06:18 | synthesised  session=2b9b6c5b  sentence_index=7  sentence='魚はおじいさんに言ったのです。'  wav_bytes=144044  synth_ms=3046
+2026-05-18 17:06:19 | synthesised  engine=KokoroJapaneseTTS  text='「私には何も必要ない、魚を自由にしてください」そしておじいさんは魚を川に戻しました。'  wav_bytes=409244  synthesis_ms=5329  audio_duration_ms=8525
+2026-05-18 17:06:19 | synthesised  session=2b9b6c5b  sentence_index=6  sentence='「私には何も必要ない、魚を自由にしてください」そしておじいさんは魚を川に戻しました。'  wav_bytes=409244  synth_ms=5329
+2026-05-18 17:06:19 | route  text='「あなたの心は本当に美しいです、これからあなたの運は良くなります」そう言って、魚'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:19 | chunk_sent  session=2b9b6c5b  wav_bytes=409244
+2026-05-18 17:06:19 | route  text='おじいさんはそれから幸せな毎日を送ることができました。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:19 | chunk_sent  session=2b9b6c5b  wav_bytes=144044
+2026-05-18 17:06:23 | synthesised  engine=KokoroJapaneseTTS  text='おじいさんはそれから幸せな毎日を送ることができました。'  wav_bytes=243644  synthesis_ms=4266  audio_duration_ms=5075
+2026-05-18 17:06:23 | synthesised  session=2b9b6c5b  sentence_index=9  sentence='おじいさんはそれから幸せな毎日を送ることができました。'  wav_bytes=243644  synth_ms=4281
+2026-05-18 17:06:24 | synthesised  engine=KokoroJapaneseTTS  text='「あなたの心は本当に美しいです、これからあなたの運は良くなります」そう言って、魚は消えてしまいました。'  wav_bytes=436844  synthesis_ms=5812  audio_duration_ms=9100
+2026-05-18 17:06:24 | synthesised  session=2b9b6c5b  sentence_index=8  sentence='「あなたの心は本当に美しいです、これからあなたの運は良くなります」そう言って、魚は消えてしまいました。'  wav_bytes=436844  synth_ms=5812
+2026-05-18 17:06:24 | chunk_sent  session=2b9b6c5b  wav_bytes=436844
+2026-05-18 17:06:24 | chunk_sent  session=2b9b6c5b  wav_bytes=243644
+2026-05-18 17:06:24 | route  text='こんにちは。'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:24 | route  text='どうしましたか？'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:27 | synthesised  engine=KokoroJapaneseTTS  text='こんにちは。'  wav_bytes=86444  synthesis_ms=2109  audio_duration_ms=1800
+2026-05-18 17:06:27 | synthesised  session=2b9b6c5b  sentence_index=0  sentence='こんにちは。'  wav_bytes=86444  synth_ms=2109
+2026-05-18 17:06:27 | route  text='何かお手伝いできることがありますか？'  passed_lang=en  effective_lang=ja  engine=KokoroJapaneseTTS
+2026-05-18 17:06:27 | chunk_sent  session=2b9b6c5b  wav_bytes=86444
+2026-05-18 17:06:27 | synthesised  engine=KokoroJapaneseTTS  text='どうしましたか？'  wav_bytes=93644  synthesis_ms=2390  audio_duration_ms=1950
+2026-05-18 17:06:27 | synthesised  session=2b9b6c5b  sentence_index=1  sentence='どうしましたか？'  wav_bytes=93644  synth_ms=2390
+2026-05-18 17:06:27 | chunk_sent  session=2b9b6c5b  wav_bytes=93644
+2026-05-18 17:06:30 | synthesised  engine=KokoroJapaneseTTS  text='何かお手伝いできることがありますか？'  wav_bytes=160844  synthesis_ms=3844  audio_duration_ms=3350
+2026-05-18 17:06:30 | synthesised  session=2b9b6c5b  sentence_index=2  sentence='何かお手伝いできることがありますか？'  wav_bytes=160844  synth_ms=3844
+2026-05-18 17:06:30 | first_chunk_sent  session=2b9b6c5b  ttfa_ms=20297  wav_bytes=160844
+2026-05-18 17:06:30 | chunk_sent  session=2b9b6c5b  wav_bytes=160844
+2026-05-18 17:06:34 | playback_complete  session=2b9b6c5b  audio_duration_ms=3350  waited_ms=3750
