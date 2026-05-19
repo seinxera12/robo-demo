@@ -25,6 +25,7 @@ export default function App() {
     currentAssistantText,
     sendTextInput,
     setRoboActive,
+    isLlmGenerating,
   } = useVoiceWebSocket({
     onRoboDeactivated: () => {
       // Auto-close the mic when the server signals end-of-turn, but only
@@ -37,8 +38,11 @@ export default function App() {
     },
   });
 
-  // Only block the button while a turn is actively in progress.
-  const canToggle = pipelineState !== 'thinking' && pipelineState !== 'speaking';
+  // Lock inputs only while the LLM is actively generating.
+  // Once the full response text arrives (llm_text_chunk), inputs unlock so
+  // the user can interrupt TTS playback via text or voice.
+  const canToggle = !isLlmGenerating;
+  const inputDisabled = isLlmGenerating;
 
   /**
    * Toggle mic on/off.
@@ -104,7 +108,7 @@ export default function App() {
       />
 
       {/* Text input */}
-      <TextInput onSend={sendTextInput} disabled={pipelineState === 'thinking' || pipelineState === 'speaking'} />
+      <TextInput onSend={sendTextInput} disabled={inputDisabled} />
     </div>
   );
 }

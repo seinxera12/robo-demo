@@ -117,6 +117,12 @@ class SileroVAD:
                 logger.debug("Barge-in detected (prob=%.3f)", speech_prob)
                 self._last_barge_in_at = now
                 self._on_barge_in()
+                # Clear _client_speaking immediately so that frames arriving
+                # before the server responds with "listening" are accumulated
+                # as normal speech rather than being dropped by the barge-in
+                # branch.  The server will also call set_speaking(False) when
+                # it transitions to "listening", which is idempotent here.
+                self._client_speaking = False
                 # Reset VAD state so we start fresh after the interrupt
                 self._reset_state()
                 return

@@ -395,9 +395,13 @@ async def ws_browser_ui(websocket: WebSocket):
                     # Inject as a TranscriptionResult into the pipeline's transcript_queue
                     transcript = TranscriptionResult(text=text, language="en", duration=0.0)
                     try:
-                        if target_pipeline._state.state == "speaking":
+                        # If TTS is playing or LLM is generating, treat this as a barge-in:
+                        # use InterruptController so TTS synthesis tasks are properly cancelled
+                        # and the audio output queue is flushed.
+                        if target_pipeline._state.state in ("speaking", "thinking"):
                             pipeline_event("WS", "text_input_barge_in",
                                            session=most_recent_session_id[:8], text=text[:80])
+                            target_pipeline._ic.request_interrupt(source="text_input")
                             target_pipeline._state.interrupt = True
 
                         await target_pipeline._state.transcript_queue.put(transcript)

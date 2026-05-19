@@ -352,9 +352,12 @@ class VoicePipeline:
                         pass
                     # New PCM16 frame while pipeline is generating — trigger barge-in only
                     # when the user has explicitly activated voice input via the tap-to-speak
-                    # button (robo_active=True).  Without this gate, ambient mic audio (speaker
-                    # bleed, background noise) would fire spurious interrupts during generation.
-                    if self._state.state in ("thinking", "speaking") and self._state.robo_active:
+                    # button (robo_active=True) AND no interrupt is already in progress.
+                    # The second guard prevents re-triggering during the cleanup window
+                    # between request_interrupt() and begin_turn().
+                    if (self._state.state in ("thinking", "speaking")
+                            and self._state.robo_active
+                            and not self._ic.cancelled.is_set()):
                         self._ic.request_interrupt(source="new_audio_frame")
                         self._state.interrupt = True
                     await self._state.audio_queue.put(raw_bytes)
@@ -367,6 +370,10 @@ class VoicePipeline:
                                            session=sid, via="text")
                             self._ic.request_interrupt(source="explicit_message")
                             self._state.interrupt = True
+                            # Do NOT deactivate robo_active here — the user's speech
+                            # after the barge-in is still being accumulated by the VAD
+                            # and will arrive shortly.  robo_active is deactivated by
+                            # _stt_worker after transcription completes.
                     except json.JSONDecodeError as exc:
                         pipeline_warn("AUDIO_IN", "bad_json", session=sid, error=str(exc))
 
@@ -746,8 +753,11 @@ class VoicePipeline:
                 pipeline_error("TTS", "synthesis_task_error", session=sid, error=str(exc))
                 return
             # Discard if a new turn has started (interrupt was processed) or
-            # the interrupt flag is still set.
-            if task_turn_id != self._current_turn_id or self._state.interrupt:
+            # the interrupt flag is still set, or the IC cancellation token is
+            # still set (catches the window between interrupt and begin_turn()).
+            if (task_turn_id != self._current_turn_id
+                    or self._state.interrupt
+                    or self._ic.cancelled.is_set()):
                 pipeline_event("TTS", "stale_synthesis_discarded", session=sid,
                                task_turn_id=task_turn_id,
                                current_turn_id=self._current_turn_id)
