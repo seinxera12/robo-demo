@@ -27,22 +27,64 @@ interface UseVoiceWebSocketReturn {
 }
 
 // ── Simulated streaming helpers ───────────────────────────────────────────
-/**
- * Calculate the per-word delay (ms) for a simulated word-by-word render.
- *
- * Target duration scales between 1.5 s (≤15 words) and 6 s (≥60 words).
- * The curve is linear between those two anchors.
- */
-function calcWordDelayMs(wordCount: number): number {
-  const MIN_DURATION_MS = 1500;  // ≤15 words
-  const MAX_DURATION_MS = 6000;  // ≥60 words
-  const MIN_WORDS = 15;
-  const MAX_WORDS = 60;
 
-  const clampedWords = Math.max(MIN_WORDS, Math.min(MAX_WORDS, wordCount));
-  const t = (clampedWords - MIN_WORDS) / (MAX_WORDS - MIN_WORDS); // 0..1
+/**
+ * Returns true if the text is predominantly CJK (Chinese/Japanese/Korean).
+ * We check whether the majority of non-whitespace characters fall in CJK
+ * Unicode ranges so that mixed-language responses are handled gracefully.
+ */
+function isCJKText(text: string): boolean {
+  // CJK Unified Ideographs, Hiragana, Katakana, CJK Compatibility, etc.
+  const cjkPattern = /[\u3000-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/g;
+  const nonWhitespace = text.replace(/\s/g, '');
+  if (nonWhitespace.length === 0) return false;
+  const cjkMatches = nonWhitespace.match(cjkPattern);
+  const cjkCount = cjkMatches ? cjkMatches.length : 0;
+  return cjkCount / nonWhitespace.length > 0.3;
+}
+
+/**
+ * Split text into render tokens.
+ *
+ * - For CJK text: each individual character is a token (no spaces between
+ *   characters in Japanese/Chinese, so space-splitting produces one giant token).
+ * - For Latin/other text: split on whitespace as before, preserving words.
+ *
+ * Returns { tokens, joinWith } where joinWith is the string used to
+ * reconstruct the visible text from tokens[0..n].
+ */
+function tokenizeText(text: string): { tokens: string[]; joinWith: string } {
+  if (isCJKText(text)) {
+    // Split into individual characters, filtering empty strings.
+    const tokens = Array.from(text).filter((ch) => ch.length > 0);
+    return { tokens, joinWith: '' };
+  }
+  // Default: split on spaces (original behaviour).
+  return { tokens: text.split(' '), joinWith: ' ' };
+}
+
+/**
+ * Calculate the per-token delay (ms) for a simulated word-by-word render.
+ *
+ * Target duration scales between 1.5 s (≤15 tokens) and 6 s (≥60 tokens).
+ * The curve is linear between those two anchors.
+ *
+ * For CJK text the "token" is a single character, so the anchor counts are
+ * scaled up (×4) to keep the same wall-clock feel — a 60-character Japanese
+ * response should still complete in ~5–6 s.
+ */
+function calcTokenDelayMs(tokenCount: number, isCJK: boolean): number {
+  const MIN_DURATION_MS = 1500;
+  const MAX_DURATION_MS = 6000;
+  // CJK characters are much more numerous than space-delimited words for the
+  // same amount of content, so scale the anchor thresholds accordingly.
+  const MIN_TOKENS = isCJK ? 60  : 15;
+  const MAX_TOKENS = isCJK ? 240 : 60;
+
+  const clampedTokens = Math.max(MIN_TOKENS, Math.min(MAX_TOKENS, tokenCount));
+  const t = (clampedTokens - MIN_TOKENS) / (MAX_TOKENS - MIN_TOKENS); // 0..1
   const totalMs = MIN_DURATION_MS + t * (MAX_DURATION_MS - MIN_DURATION_MS);
-  return totalMs / Math.max(wordCount, 1);
+  return totalMs / Math.max(tokenCount, 1);
 }
 
 export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceWebSocketReturn {
@@ -85,18 +127,21 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
   }, []);
 
   /**
-   * Start a simulated word-by-word render of `text`.
-   * Words are revealed one at a time with `delayMs` between each.
-   * When the last word is shown, `onComplete` is called.
+   * Start a simulated token-by-token render of `text`.
+   * For Latin text, tokens are space-delimited words (original behaviour).
+   * For CJK text (Japanese, Chinese, Korean), tokens are individual characters
+   * so that the animation works correctly without spaces.
+   * When the last token is shown, `onComplete` is called.
    */
   const startSimRender = useCallback(
     (text: string, onComplete: () => void) => {
       // Cancel any previous render that might still be running.
       cancelSimRender();
 
-      const words = text.split(' ');
-      const delayMs = calcWordDelayMs(words.length);
-      let wordIndex = 0;
+      const cjk = isCJKText(text);
+      const { tokens, joinWith } = tokenizeText(text);
+      const delayMs = calcTokenDelayMs(tokens.length, cjk);
+      let tokenIndex = 0;
       isSimRenderingRef.current = true;
 
       // Reset display to empty before starting.
@@ -105,15 +150,15 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
       const step = () => {
         if (!isMountedRef.current || !isSimRenderingRef.current) return;
 
-        wordIndex += 1;
-        // Reconstruct the visible text up to the current word index.
-        const visible = words.slice(0, wordIndex).join(' ');
+        tokenIndex += 1;
+        // Reconstruct the visible text up to the current token index.
+        const visible = tokens.slice(0, tokenIndex).join(joinWith);
         setCurrentAssistantText(visible);
 
-        if (wordIndex < words.length) {
+        if (tokenIndex < tokens.length) {
           simRenderTimerRef.current = setTimeout(step, delayMs);
         } else {
-          // All words shown — render complete.
+          // All tokens shown — render complete.
           simRenderTimerRef.current = null;
           isSimRenderingRef.current = false;
           onComplete();
