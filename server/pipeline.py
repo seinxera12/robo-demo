@@ -259,6 +259,16 @@ class VoicePipeline:
         self._state.robo_active = active
         pipeline_event("ROBO", "activated" if active else "deactivated",
                        session=self._state.session_id[:8])
+        # Notify the AudioClient so it can arm/disarm VAD barge-in detection.
+        msg = json.dumps({"type": "robo_activated" if active else "robo_deactivated"})
+        asyncio.ensure_future(self._send_to_audio_client(msg))
+
+    async def _send_to_audio_client(self, text: str) -> None:
+        """Send a JSON text message to the AudioClient WebSocket (best-effort)."""
+        try:
+            await self._audio_ws.send_text(text)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Helpers
@@ -297,6 +307,11 @@ class VoicePipeline:
             pipeline_event("ROBO", "auto_deactivated_after_turn",
                            session=self._state.session_id[:8])
             await self._broadcast({"type": "robo_deactivated"})
+            # Also notify the AudioClient so it can disarm VAD barge-in detection.
+            try:
+                await self._audio_ws.send_text(json.dumps({"type": "robo_deactivated"}))
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Worker 1: audio_input_worker
@@ -335,8 +350,11 @@ class VoicePipeline:
                             continue
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
-                    # New PCM16 frame while pipeline is generating — trigger barge-in
-                    if self._state.state in ("thinking", "speaking"):
+                    # New PCM16 frame while pipeline is generating — trigger barge-in only
+                    # when the user has explicitly activated voice input via the tap-to-speak
+                    # button (robo_active=True).  Without this gate, ambient mic audio (speaker
+                    # bleed, background noise) would fire spurious interrupts during generation.
+                    if self._state.state in ("thinking", "speaking") and self._state.robo_active:
                         self._ic.request_interrupt(source="new_audio_frame")
                         self._state.interrupt = True
                     await self._state.audio_queue.put(raw_bytes)
@@ -570,10 +588,11 @@ class VoicePipeline:
                             async for token in self._llm.stream(
                                 messages, max_tokens=200, temperature=0.65
                             ):
-                                if self._ic.cancelled.is_set():
-                                    pipeline_event("LLM", "stream_interrupted",
-                                                   session=sid, tokens_so_far=token_count)
-                                    break
+                                # Do NOT check cancelled here — the LLM stream must run to
+                                # completion even during a barge-in.  The _tts_worker detects
+                                # cancelled.is_set() and calls _drain_token_queue() to consume
+                                # and discard any tokens produced after the interrupt.  The
+                                # post-stream check below handles history/broadcast skipping.
 
                                 if not first_token_logged:
                                     ttft_ms = int(
@@ -948,6 +967,9 @@ class VoicePipeline:
                     self._state.interrupt = False
 
                     await self._set_state("listening")
+                    # Clear the IC CancellationToken so _llm_worker can process
+                    # the next transcript without timing out on wait_cleared().
+                    self._ic.begin_turn()
                     continue
 
                 try:
