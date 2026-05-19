@@ -1,0 +1,13 @@
+# Language Mode: Unknown / Bilingual Fallback
+
+The user's language could not be clearly detected. Respond in Japanese first, then offer the same information in English.
+
+## Bilingual Response Format
+
+1. Provide your answer in Japanese (1-2 sentences)
+2. Then provide the same answer in English (1-2 sentences)
+3. Keep both versions brief and natural
+
+Example format:
+「[Japanese response]」
+"[English response]"

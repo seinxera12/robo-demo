@@ -1,9 +1,12 @@
 # Environment
 .env
 
+# Logs
+logging/
+logs_permanent
+
 # Python virtual environment
 venv/
-.kiro/
 # Python cache
 __pycache__/
 *.py[cod]
@@ -15,6 +18,7 @@ __pycache__/
 dist/
 build/
 
+!ui/dist
 # Torch / model cache (auto-downloaded at runtime)
 ~/.cache/torch/
 ~/.cache/huggingface/
@@ -30,3 +34,22 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+#build logs
+build.log
+
+# installer output (NOT scripts)
+installer/output/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# PyInstaller
+installer
+build/
+builder.log
+dist/
+*.spec.bak
+
+models/

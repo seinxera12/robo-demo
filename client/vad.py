@@ -12,6 +12,7 @@ Requirements: 2.2, 2.3, 2.4, 2.5
 from __future__ import annotations
 
 import logging
+import time
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,15 @@ SAMPLE_RATE = 16_000          # Hz
 FRAME_SAMPLES = 512           # 32ms at 16 kHz
 FRAME_MS = 32                 # milliseconds per frame
 SPEECH_THRESHOLD = 0.5        # probability threshold for speech detection
+
+# Barge-in protection: minimum seconds after set_speaking(True) before a
+# barge-in can fire.  Prevents the TTS speaker output from feeding back into
+# the mic and triggering a false interrupt during the first ~500ms of playback.
+_BARGE_IN_COOLDOWN_S = 0.5
+
+# Barge-in debounce: minimum seconds between consecutive barge-in callbacks.
+# Prevents a single loud frame from firing the callback multiple times.
+_BARGE_IN_DEBOUNCE_S = 1.0
 
 
 class SileroVAD:
@@ -53,6 +63,10 @@ class SileroVAD:
         self._silence_frames: int = 0            # consecutive silent frame count
         self._client_speaking: bool = False      # AudioClient TTS playback state
 
+        # Barge-in timing guards
+        self._speaking_started_at: float = 0.0  # monotonic time when set_speaking(True) was called
+        self._last_barge_in_at: float = 0.0     # monotonic time of last barge-in callback
+
         # Load the Silero VAD model
         self._model = self._load_model()
 
@@ -74,8 +88,22 @@ class SileroVAD:
         if speech_prob >= SPEECH_THRESHOLD:
             # --- Speech detected ---
             if self._client_speaking:
-                # Barge-in: user started speaking while TTS is playing
+                # Barge-in: user started speaking while TTS is playing.
+                # Guard 1 — cooldown: ignore frames in the first _BARGE_IN_COOLDOWN_S
+                # after playback started (speaker bleed / echo protection).
+                # Guard 2 — debounce: ignore if we already fired a barge-in recently.
+                now = time.monotonic()
+                cooldown_elapsed = now - self._speaking_started_at
+                debounce_elapsed = now - self._last_barge_in_at
+                if (cooldown_elapsed < _BARGE_IN_COOLDOWN_S or
+                        debounce_elapsed < _BARGE_IN_DEBOUNCE_S):
+                    logger.debug(
+                        "Barge-in suppressed (cooldown=%.2fs, debounce=%.2fs)",
+                        cooldown_elapsed, debounce_elapsed,
+                    )
+                    return
                 logger.debug("Barge-in detected (prob=%.3f)", speech_prob)
+                self._last_barge_in_at = now
                 self._on_barge_in()
                 # Reset VAD state so we start fresh after the interrupt
                 self._reset_state()
@@ -115,6 +143,8 @@ class SileroVAD:
             is_speaking: True when the AudioClient is playing back TTS audio.
         """
         self._client_speaking = is_speaking
+        if is_speaking:
+            self._speaking_started_at = time.monotonic()
         logger.debug("VAD client_speaking set to %s", is_speaking)
 
     # ------------------------------------------------------------------

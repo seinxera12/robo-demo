@@ -3,7 +3,6 @@ LLMChain — two-tier fallback LLM backend.
 
 Tries the primary backend (Groq) first; on network/API errors falls back to
 the secondary backend (Gemini). If both fail, yields a hardcoded error message.
-Requirements: 1.3, 1.4, 1.5
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ import httpx
 from groq import APIError as GroqAPIError
 
 from server.llm.base import BaseLLMBackend
+from server.log import llm_log
 
 logger = logging.getLogger(__name__)
 
@@ -24,45 +24,33 @@ _FALLBACK_MESSAGE = (
 
 
 class LLMChain:
-    """
-    Two-tier LLM chain with automatic fallback.
-
-    Streams tokens from ``primary``; if that raises a Groq API error or an
-    httpx network error, transparently falls back to ``fallback``.  If both
-    backends fail, yields a single hardcoded error message string.
-    """
+    """Two-tier LLM chain with automatic fallback."""
 
     def __init__(self, primary: BaseLLMBackend, fallback: BaseLLMBackend) -> None:
-        """
-        Args:
-            primary:  The preferred LLM backend (typically Groq).
-            fallback: The backup LLM backend (typically Gemini).
-        """
         self.primary = primary
         self.fallback = fallback
 
-    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
-        """
-        Stream tokens, falling back gracefully on errors.
-
-        Args:
-            messages: OpenAI-compatible message list.
-
-        Yields:
-            Individual token strings from whichever backend succeeds,
-            or the hardcoded error message if both fail.
-        """
+    async def stream(
+        self,
+        messages: list[dict],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> AsyncIterator[str]:
+        """Stream tokens, falling back gracefully on errors."""
         try:
-            async for token in self.primary.stream(messages):
+            async for token in self.primary.stream(messages, max_tokens, temperature):
                 yield token
         except (GroqAPIError, httpx.TimeoutException, httpx.ConnectError) as e:
-            logger.warning(f"Groq LLM failed: {e}. Falling back to Gemini.")
+            llm_log.warning("primary_failed  error=%s  trying_fallback=true", e)
+            logger.warning("Groq LLM failed: %s. Falling back to Gemini.", e)
             try:
-                async for token in self.fallback.stream(messages):
+                async for token in self.fallback.stream(messages, max_tokens, temperature):
                     yield token
             except Exception as e:
-                logger.error(f"All LLM backends failed: {e}")
+                llm_log.error("fallback_failed  error=%s", e)
+                logger.error("All LLM backends failed: %s", e)
                 yield _FALLBACK_MESSAGE
         except Exception as e:
-            logger.error(f"All LLM backends failed: {e}")
+            llm_log.error("stream_error  error=%s", e)
+            logger.error("All LLM backends failed: %s", e)
             yield _FALLBACK_MESSAGE

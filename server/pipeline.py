@@ -6,7 +6,7 @@ VoicePipeline (the five asyncio worker coroutines).
 
 Workers:
   audio_input_worker  — receives PCM16 from AudioClient WebSocket
-  stt_worker          — transcribes audio via Groq Whisper API
+  stt_worker          — transcribes audio via Groq Whisper API (only when robo_active)
   llm_worker          — streams LLM tokens, optional Tavily search
   tts_worker          — accumulates tokens to sentence boundary, synthesises WAV
   audio_output_worker — sends WAV chunks to AudioClient, manages state transitions
@@ -18,18 +18,20 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass
-from typing import Callable, Optional
+from dataclasses import dataclass, field
+from typing import Callable
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
 from server.lang.detector import LanguageDetector
+from server.llm.assembler import DeploymentConfig, PromptAssembler
 from server.llm.chain import LLMChain
 from server.llm.intent import IntentClassifier
-from server.llm.prompt_builder import PromptBuilder
+from server.llm.postprocess import PostProcessor
+from server.llm.router import Router
+from server.log import pipeline_error, pipeline_event, pipeline_separator, pipeline_warn, tts_log
 from server.models import TranscriptionResult
-from server.search.tavily_search import TavilySearchClient
 from server.stt.groq_stt import GroqSTTBackend
 from server.tts.tts_router import TTSRouter
 
@@ -43,17 +45,102 @@ _MAX_HISTORY_ENTRIES = 20
 
 
 # ---------------------------------------------------------------------------
+# Interrupt controller
+# ---------------------------------------------------------------------------
+
+
+class InterruptController:
+    """Owns the current Turn ID and CancellationToken for one pipeline session.
+
+    All methods are safe to call from any asyncio coroutine on the same
+    event loop. No asyncio.Lock is used in any hot-path method.
+    """
+
+    def __init__(self, session_id: str) -> None:
+        self._session_id = session_id[:8]
+        self._turn_id: int = 0
+        self.cancelled: asyncio.Event = asyncio.Event()
+        self._synthesis_tasks: list[asyncio.Task] = []
+        self._interrupt_start: float = 0.0
+        self._last_duration_ms: float = 0.0
+
+    # --- Hot-path (synchronous, non-blocking) ---
+
+    def request_interrupt(self, source: str = "unknown") -> None:
+        """Set the CancellationToken. Idempotent — safe to call multiple times."""
+        if self.cancelled.is_set():
+            return  # already interrupted for this turn
+        self._interrupt_start = time.monotonic()
+        self.cancelled.set()
+        logger.info(
+            "INTERRUPT turn_id=%d source=%s session=%s",
+            self._turn_id, source, self._session_id,
+        )
+
+    def begin_turn(self) -> int:
+        """Clear the CancellationToken and assign a new Turn ID. Returns new ID."""
+        self._turn_id += 1
+        self.cancelled.clear()
+        self._synthesis_tasks.clear()
+        if self._interrupt_start:
+            self._last_duration_ms = (time.monotonic() - self._interrupt_start) * 1000
+            logger.info(
+                "INTERRUPT_COMPLETE turn_id=%d cleanup_ms=%.1f new_turn_id=%d session=%s",
+                self._turn_id - 1, self._last_duration_ms,
+                self._turn_id, self._session_id,
+            )
+            self._interrupt_start = 0.0
+        return self._turn_id
+
+    @property
+    def current_turn_id(self) -> int:
+        return self._turn_id
+
+    @property
+    def last_interrupt_duration_ms(self) -> float:
+        return self._last_duration_ms
+
+    # --- Task registry ---
+
+    def register_task(self, task: asyncio.Task) -> None:
+        """Register a synthesis task so cleanup() can cancel it."""
+        self._synthesis_tasks.append(task)
+
+    # --- Cleanup (async, called on stop or explicit cleanup) ---
+
+    async def cleanup(self) -> None:
+        """Cancel all tracked synthesis tasks and wait up to 2 s for them."""
+        tasks = [t for t in self._synthesis_tasks if not t.done()]
+        if not tasks:
+            return
+        for t in tasks:
+            t.cancel()
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "IC.cleanup: %d task(s) did not finish within 2s (session=%s)",
+                len(tasks), self._session_id,
+            )
+        self._synthesis_tasks.clear()
+
+    async def wait_cleared(self) -> None:
+        """Await until the CancellationToken is no longer set."""
+        while self.cancelled.is_set():
+            await asyncio.sleep(0.02)
+
+
+# ---------------------------------------------------------------------------
 # Pipeline state
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class PipelineState:
-    """Shared mutable state for a single AudioClient WebSocket session.
-
-    One instance is created per connection and passed to all five pipeline
-    workers so they can coordinate state transitions and interrupt handling.
-    """
+    """Shared mutable state for a single AudioClient WebSocket session."""
 
     session_id: str
     history: list[dict]              # ConversationHistory, max 10 turns
@@ -64,6 +151,10 @@ class PipelineState:
     transcript_queue: asyncio.Queue  # TranscriptionResult
     token_queue: asyncio.Queue       # str tokens from LLM (or _END_OF_TOKENS sentinel)
     audio_out_queue: asyncio.Queue   # WAV bytes for AudioClient
+    robo_active: bool = False        # True when the user has activated Robo via the UI button
+    deployment_config: DeploymentConfig = field(default_factory=DeploymentConfig)  # Deployment configuration
+    model_tier: str = "groq"         # "groq" | "small", determined at startup
+    interrupt_controller: "InterruptController | None" = None  # set by VoicePipeline.__init__
 
 
 # ---------------------------------------------------------------------------
@@ -72,20 +163,7 @@ class PipelineState:
 
 
 class VoicePipeline:
-    """Orchestrates the five asyncio pipeline workers for a single session.
-
-    Args:
-        audio_client_ws: The WebSocket connection to the AudioClient.
-        state:           The shared PipelineState for this session.
-        stt_backend:     GroqSTTBackend instance.
-        llm_chain:       LLMChain (Groq primary → Gemini fallback).
-        tts_router:      TTSRouter for sentence-boundary TTS synthesis.
-        lang_detector:   LanguageDetector to map STT language codes.
-        prompt_builder:  PromptBuilder to assemble LLM message lists.
-        intent_classifier: Optional IntentClassifier (None if Tavily not configured).
-        tavily_client:   Optional TavilySearchClient (None if not configured).
-        broadcast_fn:    Async callable that sends a JSON dict to all BrowserUI clients.
-    """
+    """Orchestrates the five asyncio pipeline workers for a single session."""
 
     def __init__(
         self,
@@ -95,9 +173,10 @@ class VoicePipeline:
         llm_chain: LLMChain,
         tts_router: TTSRouter,
         lang_detector: LanguageDetector,
-        prompt_builder: PromptBuilder,
-        intent_classifier: Optional[IntentClassifier],
-        tavily_client: Optional[TavilySearchClient],
+        intent_classifier: IntentClassifier,
+        prompt_assembler: PromptAssembler,
+        router: Router,
+        post_processor: PostProcessor,
         broadcast_fn: Callable,
     ) -> None:
         self._audio_ws = audio_client_ws
@@ -106,17 +185,40 @@ class VoicePipeline:
         self._llm = llm_chain
         self._tts = tts_router
         self._lang = lang_detector
-        self._prompt = prompt_builder
         self._intent = intent_classifier
-        self._tavily = tavily_client
+        self._assembler = prompt_assembler
+        self._router = router
+        self._post_processor = post_processor
         self._broadcast_fn = broadcast_fn
 
         self._tasks: list[asyncio.Task] = []
 
+        # Interrupt controller — one per session
+        self._ic = InterruptController(state.session_id)
+        state.interrupt_controller = self._ic
+
         # Per-turn timing / token counters (reset each turn)
         self._speech_end_time: float = 0.0
-        self._first_token_time: float = 0.0
         self._token_count: int = 0
+        self._turn_audio_duration_ms: int = 0   # total audio queued this turn (ms)
+        self._tts_turn_complete: bool = False    # set True when tts_worker finishes a turn
+
+        # Monotonically increasing turn counter.  Incremented by _llm_worker at
+        # the start of every new turn.  _tts_worker stamps each synthesis task
+        # with the turn ID at creation time; _await_and_enqueue discards the
+        # result if the turn ID has advanced (i.e. an interrupt arrived and a
+        # new turn started) before synthesis completed.  This closes the TOCTOU
+        # race where _audio_output_worker clears the interrupt flag before
+        # _tts_worker has had a chance to check it.
+        self._current_turn_id: int = 0
+
+        # Set to True by _llm_worker when it increments _current_turn_id for
+        # a text barge-in turn.  Read and cleared by _audio_output_worker so
+        # it knows not to double-increment the counter for the same interrupt.
+        self._llm_claimed_interrupt: bool = False
+
+        # Throttle the "audio_dropped_robo_idle" log — only emit once per 60s
+        self._last_idle_drop_log: float = 0.0
 
     # ------------------------------------------------------------------
     # Public API
@@ -124,6 +226,9 @@ class VoicePipeline:
 
     async def run(self) -> None:
         """Spawn all five workers as asyncio tasks and await them."""
+        sid = self._state.session_id[:8]
+        pipeline_separator(f"SESSION {sid}")
+        pipeline_event("SESSION", "started", session=sid)
         self._tasks = [
             asyncio.create_task(self._audio_input_worker(), name="audio_input_worker"),
             asyncio.create_task(self._stt_worker(), name="stt_worker"),
@@ -136,13 +241,24 @@ class VoicePipeline:
         except asyncio.CancelledError:
             pass
         except Exception as exc:
+            pipeline_error("SESSION", "unhandled_exception", session=sid, error=str(exc))
             logger.error("VoicePipeline.run() unhandled exception: %s", exc, exc_info=True)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Cancel all pipeline worker tasks."""
+        sid = self._state.session_id[:8]
+        pipeline_event("SESSION", "stopped", session=sid)
+        pipeline_separator()
+        await self._ic.cleanup()
         for task in self._tasks:
             if not task.done():
                 task.cancel()
+
+    def set_robo_active(self, active: bool) -> None:
+        """Called by the WebSocket handler when the UI button is toggled."""
+        self._state.robo_active = active
+        pipeline_event("ROBO", "activated" if active else "deactivated",
+                       session=self._state.session_id[:8])
 
     # ------------------------------------------------------------------
     # Helpers
@@ -159,114 +275,102 @@ class VoicePipeline:
         """Update pipeline state and broadcast status to all clients."""
         old_state = self._state.state
         self._state.state = new_state
-        logger.debug(
-            "state transition: %s → %s (t=%.3fs)",
-            old_state,
-            new_state,
-            time.monotonic(),
-        )
+
+        pipeline_event("STATE", f"{old_state} → {new_state}",
+                       session=self._state.session_id[:8],
+                       **({"msg": message} if message else {}))
+
         status_msg: dict = {"type": "status", "state": new_state}
         if message:
             status_msg["message"] = message
-        # Broadcast to all BrowserUI clients
         await self._broadcast(status_msg)
-        # Also send to AudioClient
         try:
             await self._audio_ws.send_text(json.dumps(status_msg))
         except Exception as exc:
-            logger.warning("_set_state: failed to send to AudioClient: %s", exc)
+            pipeline_warn("STATE", "send_failed",
+                          session=self._state.session_id[:8], error=str(exc))
+
+        # After a full turn (speaking → listening), deactivate Robo so the
+        # user must press the button again for the next turn.
+        if new_state == "listening" and old_state == "speaking" and self._state.robo_active:
+            self._state.robo_active = False
+            pipeline_event("ROBO", "auto_deactivated_after_turn",
+                           session=self._state.session_id[:8])
+            await self._broadcast({"type": "robo_deactivated"})
 
     # ------------------------------------------------------------------
     # Worker 1: audio_input_worker
     # ------------------------------------------------------------------
 
     async def _audio_input_worker(self) -> None:
-        """Receive binary PCM16 frames (or JSON interrupt) from the AudioClient WebSocket.
-
-        - Binary frames are pushed to state.audio_queue.
-        - JSON frames with type=="interrupt" set state.interrupt = True.
-        - Runs until the WebSocket disconnects, then cancels all other workers.
-        """
+        """Receive binary PCM16 frames (or JSON interrupt) from the AudioClient WebSocket."""
+        sid = self._state.session_id[:8]
         try:
             while True:
                 try:
-                    # Receive the next WebSocket message (binary or text)
                     data = await self._audio_ws.receive()
                 except WebSocketDisconnect:
-                    logger.info(
-                        "audio_input_worker: AudioClient disconnected (session=%s)",
-                        self._state.session_id,
-                    )
+                    pipeline_event("AUDIO_IN", "client_disconnected", session=sid)
                     break
                 except Exception as exc:
-                    logger.error("audio_input_worker: receive error: %s", exc)
+                    pipeline_error("AUDIO_IN", "receive_error", session=sid, error=str(exc))
                     break
 
-                # Starlette WebSocket.receive() returns a dict with either
-                # "bytes" or "text" key (plus "type").
                 msg_type = data.get("type", "")
                 if msg_type == "websocket.disconnect":
-                    logger.info(
-                        "audio_input_worker: WebSocket disconnect event (session=%s)",
-                        self._state.session_id,
-                    )
+                    pipeline_event("AUDIO_IN", "client_disconnected", session=sid)
                     break
 
                 raw_bytes = data.get("bytes")
                 raw_text = data.get("text")
 
                 if raw_bytes is not None:
-                    # Try to parse as JSON first (interrupt messages may arrive as binary)
                     try:
                         parsed = json.loads(raw_bytes)
                         if parsed.get("type") == "interrupt":
-                            logger.debug(
-                                "audio_input_worker: interrupt received (binary JSON)"
-                            )
+                            pipeline_event("AUDIO_IN", "interrupt_received",
+                                           session=sid, via="binary")
+                            self._ic.request_interrupt(source="explicit_message")
                             self._state.interrupt = True
                             continue
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
-                    # Regular PCM16 audio frame
+                    # New PCM16 frame while pipeline is generating — trigger barge-in
+                    if self._state.state in ("thinking", "speaking"):
+                        self._ic.request_interrupt(source="new_audio_frame")
+                        self._state.interrupt = True
                     await self._state.audio_queue.put(raw_bytes)
 
                 elif raw_text is not None:
-                    # JSON control message
                     try:
                         parsed = json.loads(raw_text)
                         if parsed.get("type") == "interrupt":
-                            logger.debug(
-                                "audio_input_worker: interrupt received (text JSON)"
-                            )
+                            pipeline_event("AUDIO_IN", "interrupt_received",
+                                           session=sid, via="text")
+                            self._ic.request_interrupt(source="explicit_message")
                             self._state.interrupt = True
                     except json.JSONDecodeError as exc:
-                        logger.warning(
-                            "audio_input_worker: failed to parse JSON text: %s", exc
-                        )
+                        pipeline_warn("AUDIO_IN", "bad_json", session=sid, error=str(exc))
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error(
-                "audio_input_worker: unexpected error: %s", exc, exc_info=True
-            )
+            pipeline_error("AUDIO_IN", "unexpected_error", session=sid, error=str(exc))
         finally:
-            # Cancel all sibling workers when the WebSocket disconnects
-            logger.info(
-                "audio_input_worker: shutting down pipeline (session=%s)",
-                self._state.session_id,
-            )
-            self.stop()
+            pipeline_event("AUDIO_IN", "shutting_down_pipeline", session=sid)
+            asyncio.ensure_future(self.stop())
 
     # ------------------------------------------------------------------
     # Worker 2: stt_worker
     # ------------------------------------------------------------------
 
     async def _stt_worker(self) -> None:
-        """Drain audio_queue, transcribe via Groq STT, push TranscriptionResult.
+        """Drain audio_queue and transcribe — only when robo_active is True.
 
-        State transition: listening → thinking
+        Audio frames that arrive while robo_active is False are silently
+        discarded; the mic keeps running but no STT API calls are made.
         """
+        sid = self._state.session_id[:8]
         try:
             while True:
                 try:
@@ -276,74 +380,68 @@ class VoicePipeline:
                 except asyncio.TimeoutError:
                     continue
 
-                logger.debug(
-                    "stt_worker: received %d bytes of PCM16 audio", len(pcm16_bytes)
-                )
+                # Gate: drop audio silently when Robo is not active.
+                # Log at most once per 60s to avoid flooding system.log.
+                if not self._state.robo_active:
+                    now = time.monotonic()
+                    if now - self._last_idle_drop_log >= 60.0:
+                        pipeline_event("STT", "audio_dropped_robo_idle", session=sid)
+                        self._last_idle_drop_log = now
+                    continue
 
-                # Record speech_end time for TTFA measurement
                 self._speech_end_time = time.monotonic()
-                logger.debug(
-                    "stt_worker: speech_end recorded (audio_queue depth=%d)",
-                    self._state.audio_queue.qsize(),
-                )
+                audio_kb = len(pcm16_bytes) // 1024
+                pipeline_event("STT", "audio_received", session=sid, size_kb=audio_kb)
 
-                # Transition to thinking
                 await self._set_state("thinking")
 
                 try:
                     result: TranscriptionResult = await self._stt.transcribe(pcm16_bytes)
                 except Exception as exc:
-                    logger.error("stt_worker: STT transcription failed: %s", exc)
-                    # Send user-friendly error and return to listening
-                    await self._set_state(
-                        "listening",
-                        message="Couldn't hear you clearly. Please try again.",
-                    )
+                    pipeline_error("STT", "transcription_failed", session=sid, error=str(exc))
+                    await self._set_state("listening")
                     continue
 
-                logger.debug(
-                    "stt_worker: transcript=%r language=%r",
-                    result.text,
-                    result.language,
-                )
+                stt_ms = int((time.monotonic() - self._speech_end_time) * 1000)
+                pipeline_event("STT", "transcript_ready",
+                               session=sid,
+                               text=result.text[:80],
+                               lang=result.language,
+                               latency_ms=stt_ms)
 
-                # Update detected language
                 self._state.detected_language = self._lang.detect(result)
 
-                # Broadcast transcript to BrowserUI
-                await self._broadcast(
-                    {
-                        "type": "transcript",
-                        "text": result.text,
-                        "language": result.language,
-                    }
-                )
+                await self._broadcast({
+                    "type": "transcript",
+                    "text": result.text,
+                    "language": result.language,
+                })
 
-                # Push to transcript queue for llm_worker
+                pipeline_event("STT", "forwarded_to_llm",
+                               session=sid,
+                               text=result.text[:80],
+                               lang=self._state.detected_language)
+
                 await self._state.transcript_queue.put(result)
-                logger.debug(
-                    "stt_worker: transcript_queue depth=%d",
-                    self._state.transcript_queue.qsize(),
-                )
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("stt_worker: unexpected error: %s", exc, exc_info=True)
+            pipeline_error("STT", "unexpected_error", session=sid, error=str(exc))
 
     # ------------------------------------------------------------------
     # Worker 3: llm_worker
     # ------------------------------------------------------------------
 
     async def _llm_worker(self) -> None:
-        """Drain transcript_queue, run intent check, stream LLM tokens.
+        """Drain transcript_queue, run intent classification, route, assemble prompt, stream LLM tokens."""
+        sid = self._state.session_id[:8]
 
-        - Optionally calls Tavily search for SEARCH intent.
-        - Streams tokens to token_queue and broadcasts llm_text_chunk to BrowserUI.
-        - Respects state.interrupt to stop streaming early.
-        - Appends user/assistant turn to conversation history after each turn.
-        - Enforces 10-turn sliding window on history.
-        """
+        # Fallback message used when Call 2 returns empty after retry
+        _FALLBACK_MESSAGE = (
+            "I'm having trouble connecting right now. Please try again in a moment."
+        )
+
         try:
             while True:
                 try:
@@ -353,100 +451,233 @@ class VoicePipeline:
                 except asyncio.TimeoutError:
                     continue
 
-                logger.debug("llm_worker: processing transcript=%r", transcript.text)
+                # Task 4.1 — Guard: wait for any in-progress interrupt cleanup to finish
+                # before processing the next transcript.
+                if self._ic.cancelled.is_set():
+                    try:
+                        await asyncio.wait_for(self._ic.wait_cleared(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "LLM: timed out waiting for interrupt clear (session=%s)", sid
+                        )
+                        continue
 
-                # Optional intent classification + Tavily search
-                search_context = ""
-                if self._intent is not None and self._tavily is not None:
-                    intent = self._intent.classify(transcript.text)
-                    logger.debug("llm_worker: intent=%r", intent)
-                    if intent == "SEARCH":
-                        try:
-                            search_context = await self._tavily.search(transcript.text)
-                            logger.debug(
-                                "llm_worker: search_context length=%d",
-                                len(search_context),
-                            )
-                        except Exception as exc:
-                            logger.warning(
-                                "llm_worker: Tavily search failed: %s — continuing as GENERAL",
-                                exc,
-                            )
-                            search_context = ""
+                # Task 13.6 — Empty transcript skip logic
+                if transcript.text.strip() == "":
+                    logger.info("LLM: empty transcript — skipping LLM calls (session=%s)", sid)
+                    await self._set_state("listening")
+                    continue
 
-                # Build messages for LLM
-                messages = self._prompt.build(
-                    transcript.text,
-                    self._state.history,
-                    search_context,
-                )
+                # Task 4.1 — Begin a new turn: clears CancellationToken, assigns new Turn ID.
+                turn_id = self._ic.begin_turn()
 
-                # Stream tokens from LLM
-                full_response_parts: list[str] = []
-                self._token_count = 0
+                pipeline_event("LLM", "turn_start",
+                               session=sid,
+                               query=transcript.text[:80],
+                               history_turns=len(self._state.history) // 2)
+
+                # Broadcast 'thinking' so the frontend can lock the text input
+                # and mic button while LLM generation is in progress.
+                await self._set_state("thinking")
+
+                # Advance the turn counter so any in-flight TTS synthesis tasks
+                # from the previous turn are discarded when they complete.
+                # Set _llm_claimed_interrupt so _audio_output_worker knows not
+                # to double-increment for the same interrupt event.
+                self._current_turn_id += 1
+                self._llm_claimed_interrupt = True
+
+                # Reset per-turn counters.
+                # _speech_end_time is set here so it is always valid for the
+                # text-input path (where _stt_worker is bypassed and never
+                # sets it).  For the voice path, _stt_worker sets it earlier
+                # and this line overwrites it with a value that is only a few
+                # milliseconds later — negligible for TTFA/TTFT measurements.
+                self._speech_end_time = time.monotonic()
+                self._turn_audio_duration_ms = 0
+                self._tts_turn_complete = False
+
+                # Task 17.1 — Unhandled exception wrapper for the entire per-turn block
                 try:
-                    async for token in self._llm.stream(messages):
-                        # Check interrupt flag before processing each token
-                        if self._state.interrupt:
-                            logger.debug("llm_worker: interrupt detected, stopping stream")
-                            break
 
-                        # Track first-token latency
-                        if not full_response_parts:
-                            self._first_token_time = time.monotonic()
-                            logger.debug(
-                                "llm_worker: first token latency=%.0fms",
-                                (self._first_token_time - self._speech_end_time) * 1000,
+                    # Task 13.1 — Call 1: LLM-based intent classification
+                    call1_start = time.monotonic()
+                    intent_result = await self._intent.classify(transcript.text)
+                    call1_ttft_ms = int((time.monotonic() - call1_start) * 1000)
+                    pipeline_event("LLM", "call1_intent_classified",
+                                   session=sid,
+                                   intent=intent_result.intent,
+                                   language=intent_result.language,
+                                   confidence=intent_result.confidence,
+                                   ttft_ms=call1_ttft_ms)
+
+                    # Task 13.2 — Route based on intent result
+                    route_result = await self._router.route(
+                        intent_result, self._state.detected_language
+                    )
+                    pipeline_event("LLM", "routed",
+                                   session=sid,
+                                   route_type=route_result.route_type,
+                                   has_direct_response=route_result.direct_response is not None,
+                                   has_context=bool(route_result.retrieved_context))
+
+                    # Task 13.2 — If direct_response is set: skip Call 2
+                    if route_result.direct_response is not None:
+                        direct_text = route_result.direct_response
+                        pipeline_event("LLM", "direct_response",
+                                       session=sid,
+                                       route_type=route_result.route_type,
+                                       response_preview=direct_text[:60])
+                        # Push the direct response as a single token + sentinel
+                        await self._state.token_queue.put(direct_text)
+                        await self._broadcast({"type": "llm_text_chunk", "text": direct_text})
+                        await self._state.token_queue.put(_END_OF_TOKENS)
+
+                        # Store in history (direct responses are not truncated — they're short)
+                        if transcript.text.strip() and direct_text.strip():
+                            self._state.history.append(
+                                {"role": "user", "content": transcript.text}
                             )
+                            self._state.history.append(
+                                {"role": "assistant", "content": direct_text}
+                            )
+                            while len(self._state.history) > _MAX_HISTORY_ENTRIES:
+                                self._state.history.pop(0)
+                                self._state.history.pop(0)
+                        continue
 
-                        full_response_parts.append(token)
-                        self._token_count += 1
+                    # Task 13.3 — Assemble prompt using PromptAssembler
+                    _system_prompt, messages = self._assembler.assemble_prompt(
+                        user_input=transcript.text,
+                        intent_result=intent_result,
+                        session_history=self._state.history,
+                        retrieved_context=route_result.retrieved_context,
+                        route_type=route_result.route_type,
+                    )
 
-                        # Push token to tts_worker
-                        await self._state.token_queue.put(token)
-                        logger.debug(
-                            "llm_worker: token_queue depth=%d",
-                            self._state.token_queue.qsize(),
+                    # Task 7 — Call 2: stream tokens directly to token_queue with retry logic
+                    async def _stream_call2_to_queue() -> str:
+                        """Stream Call 2 tokens directly to token_queue.
+
+                        Pushes each token to token_queue immediately as it arrives.
+                        Returns the assembled full response string (for history/broadcast).
+                        Returns empty string on failure or interrupt.
+                        """
+                        parts: list[str] = []
+                        token_count = 0
+                        first_token_logged = False
+                        try:
+                            async for token in self._llm.stream(
+                                messages, max_tokens=200, temperature=0.65
+                            ):
+                                if self._ic.cancelled.is_set():
+                                    pipeline_event("LLM", "stream_interrupted",
+                                                   session=sid, tokens_so_far=token_count)
+                                    break
+
+                                if not first_token_logged:
+                                    ttft_ms = int(
+                                        (time.monotonic() - self._speech_end_time) * 1000
+                                    )
+                                    pipeline_event("LLM", "call2_first_token",
+                                                   session=sid, ttft_ms=ttft_ms)
+                                    first_token_logged = True
+
+                                await self._state.token_queue.put(token)
+                                parts.append(token)
+                                token_count += 1
+                        except Exception as exc:
+                            pipeline_error("LLM", "call2_stream_error",
+                                           session=sid, error=str(exc))
+                        return "".join(parts)
+
+                    full_response = await _stream_call2_to_queue()
+
+                    # Task 4.1 — If cancelled mid-stream: push sentinel, log, skip history/broadcast
+                    if self._ic.cancelled.is_set():
+                        token_count = len(full_response.split()) if full_response else 0
+                        await self._state.token_queue.put(_END_OF_TOKENS)
+                        logger.info(
+                            "LLM cancelled turn_id=%d tokens_discarded=%d session=%s",
+                            turn_id, token_count, sid,
                         )
+                        continue
 
-                        # Broadcast to BrowserUI
-                        await self._broadcast(
-                            {"type": "llm_text_chunk", "text": token}
+                    # Retry once if empty — retry tokens also go to token_queue
+                    if not full_response.strip():
+                        pipeline_warn("LLM", "call2_empty_response_retrying", session=sid)
+                        full_response = await _stream_call2_to_queue()
+
+                    # After retry failure: push fallback as a single token
+                    if not full_response.strip():
+                        pipeline_error("LLM", "call2_empty_after_retry_using_fallback",
+                                       session=sid)
+                        await self._state.token_queue.put(_FALLBACK_MESSAGE)
+                        full_response = _FALLBACK_MESSAGE
+
+                    # Clarification suffix: push as an additional token to token_queue
+                    if route_result.clarification_suffix:
+                        suffix_token = " " + route_result.clarification_suffix
+                        await self._state.token_queue.put(suffix_token)
+                        full_response = full_response + suffix_token
+
+                    # Signal end of stream — TTS worker can now flush and synthesise
+                    await self._state.token_queue.put(_END_OF_TOKENS)
+
+                    # Apply PostProcessor to assembled response for UI broadcast only
+                    # (raw tokens were already pushed to token_queue above)
+                    cleaned_response = self._post_processor.clean(
+                        full_response, self._state.detected_language
+                    )
+
+                    pipeline_event("LLM", "turn_complete",
+                                   session=sid,
+                                   response_preview=cleaned_response[:60])
+
+                    # Broadcast cleaned text to UI (after END_OF_TOKENS is pushed)
+                    await self._broadcast({"type": "llm_text_chunk", "text": cleaned_response})
+
+                    # Task 13.7 — Store history with long response truncation
+                    if transcript.text.strip() and full_response.strip():
+                        # Truncate assistant response to 120 tokens (words) before storing
+                        response_words = full_response.split()
+                        if len(response_words) > 120:
+                            stored_response = " ".join(response_words[:120])
+                        else:
+                            stored_response = full_response
+
+                        self._state.history.append(
+                            {"role": "user", "content": transcript.text}
                         )
+                        self._state.history.append(
+                            {"role": "assistant", "content": stored_response}
+                        )
+                        # Enforce _MAX_HISTORY_ENTRIES cap (remove oldest pairs first)
+                        while len(self._state.history) > _MAX_HISTORY_ENTRIES:
+                            self._state.history.pop(0)
+                            self._state.history.pop(0)
+
                 except Exception as exc:
+                    # Task 17.1 — Catch unhandled exceptions, log ERROR, emit fallback
+                    pipeline_error("LLM", "turn_unhandled_exception",
+                                   session=sid, error=str(exc))
                     logger.error(
-                        "llm_worker: LLM streaming error: %s", exc, exc_info=True
+                        "LLM worker unhandled exception (session=%s): %s",
+                        sid, exc, exc_info=True,
                     )
-
-                logger.debug("llm_worker: total_tokens=%d", self._token_count)
-                self._token_count = 0
-
-                # Signal end of token stream to tts_worker
-                await self._state.token_queue.put(_END_OF_TOKENS)
-
-                # Update conversation history (even if interrupted, save what we have)
-                full_response = "".join(full_response_parts)
-                if transcript.text.strip() and full_response.strip():
-                    self._state.history.append(
-                        {"role": "user", "content": transcript.text}
-                    )
-                    self._state.history.append(
-                        {"role": "assistant", "content": full_response}
-                    )
-                    # Enforce 10-turn (20-entry) sliding window
-                    while len(self._state.history) > _MAX_HISTORY_ENTRIES:
-                        # Remove oldest user+assistant pair
-                        self._state.history.pop(0)
-                        self._state.history.pop(0)
-
-                    logger.debug(
-                        "llm_worker: history now %d entries", len(self._state.history)
-                    )
+                    try:
+                        await self._state.token_queue.put(_FALLBACK_MESSAGE)
+                        await self._broadcast(
+                            {"type": "llm_text_chunk", "text": _FALLBACK_MESSAGE}
+                        )
+                        await self._state.token_queue.put(_END_OF_TOKENS)
+                    except Exception:
+                        pass  # Don't let queue errors propagate either
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("llm_worker: unexpected error: %s", exc, exc_info=True)
+            pipeline_error("LLM", "unexpected_error", session=sid, error=str(exc))
 
     # ------------------------------------------------------------------
     # Worker 4: tts_worker
@@ -455,12 +686,51 @@ class VoicePipeline:
     async def _tts_worker(self) -> None:
         """Drain token_queue, accumulate to sentence boundary, synthesise WAV.
 
-        - Uses TTSRouter.accumulate() to detect sentence boundaries.
-        - Calls TTSRouter.synthesize() when a sentence is complete.
-        - Pushes WAV bytes to audio_out_queue.
-        - Respects state.interrupt: drains and discards audio_out_queue.
-        - Calls TTSRouter.flush() at end of token stream for any remaining text.
+        Sentences are synthesised concurrently (up to 2 in-flight tasks) via
+        asyncio.create_task().  Tasks are maintained in submission order so
+        that audio_out_queue always receives WAV chunks in sentence order,
+        regardless of which synthesis task finishes first.
         """
+        sid = self._state.session_id[:8]
+        pending_tasks: list[asyncio.Task] = []  # in submission order
+        pending_turn_ids: list[int] = []         # turn ID for each pending task
+        sentence_index: int = 0                 # reset to 0 each turn
+        tts_start_time: float = 0.0             # set when first sentence of turn is created
+
+        async def _await_and_enqueue(task: asyncio.Task, task_turn_id: int) -> None:
+            """Await a synthesis task and enqueue its WAV bytes if valid.
+
+            Discards the result if the turn ID has advanced since the task was
+            created — this closes the TOCTOU race where _audio_output_worker
+            clears the interrupt flag before synthesis completes.
+            """
+            nonlocal tts_start_time
+            try:
+                result = await task
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                pipeline_error("TTS", "synthesis_task_error", session=sid, error=str(exc))
+                return
+            # Discard if a new turn has started (interrupt was processed) or
+            # the interrupt flag is still set.
+            if task_turn_id != self._current_turn_id or self._state.interrupt:
+                pipeline_event("TTS", "stale_synthesis_discarded", session=sid,
+                               task_turn_id=task_turn_id,
+                               current_turn_id=self._current_turn_id)
+                return
+            if result is not None:
+                wav_bytes, idx = result
+                if wav_bytes:
+                    if idx == 0:
+                        tts_enqueue_ms = int((time.monotonic() - self._speech_end_time) * 1000)
+                        pipeline_event("TTS", "first_wav_enqueued",
+                                       tts_enqueue_ms=tts_enqueue_ms)
+                    wav_body_bytes = max(0, len(wav_bytes) - 44)
+                    duration_ms = int(wav_body_bytes / 2 / 24000 * 1000)
+                    self._turn_audio_duration_ms += duration_ms
+                    await self._state.audio_out_queue.put(wav_bytes)
+
         try:
             while True:
                 try:
@@ -470,51 +740,142 @@ class VoicePipeline:
                 except asyncio.TimeoutError:
                     continue
 
-                # Check interrupt before processing
-                if self._state.interrupt:
-                    logger.debug("tts_worker: interrupt detected, draining queues")
-                    await self._handle_interrupt()
-                    # Drain remaining tokens until end-of-stream sentinel
+                if self._ic.cancelled.is_set():
+                    pipeline_event("TTS", "interrupt_drain", session=sid,
+                                   turn_id=self._ic.current_turn_id)
+                    # Cancel all in-flight synthesis tasks
+                    for task in pending_tasks:
+                        task.cancel()
+                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+                    pending_tasks.clear()
+                    pending_turn_ids.clear()
+                    sentence_index = 0
+                    self._tts.flush()
                     if token is not _END_OF_TOKENS:
                         await self._drain_token_queue()
                     continue
 
-                # End-of-stream sentinel
                 if token is _END_OF_TOKENS:
                     # Flush any remaining buffered text
                     remaining = self._tts.flush()
                     if remaining and not self._state.interrupt:
-                        await self._synthesize_and_enqueue(remaining)
+                        task_turn_id = self._current_turn_id
+                        task = asyncio.create_task(
+                            self._synthesize_and_enqueue(remaining, sentence_index)
+                        )
+                        self._ic.register_task(task)
+                        pending_tasks.append(task)
+                        pending_turn_ids.append(task_turn_id)
+                        sentence_index += 1
+
+                    # Await all pending tasks in submission order to preserve ordering.
+                    # Check interrupt/turn-id after each await — if an interrupt arrives
+                    # while we are blocked in synthesis, bail out without setting
+                    # _tts_turn_complete (audio_output_worker handles cleanup).
+                    interrupted = False
+                    for task, task_turn_id in zip(pending_tasks, pending_turn_ids):
+                        await _await_and_enqueue(task, task_turn_id)
+                        if self._state.interrupt or task_turn_id != self._current_turn_id:
+                            interrupted = True
+                            break
+                    pending_tasks.clear()
+                    pending_turn_ids.clear()
+                    sentence_index = 0
+
+                    if interrupted:
+                        pipeline_event("TTS", "interrupt_drain", session=sid)
+                        await self._handle_interrupt()
+                        await self._drain_token_queue()
+                        continue
+
+                    # Signal to audio_output_worker that all sentences for this
+                    # turn have been synthesised and enqueued.
+                    self._tts_turn_complete = True
                     continue
 
-                # Accumulate token; check for sentence boundary
                 sentence = self._tts.accumulate(token)
                 if sentence and not self._state.interrupt:
-                    await self._synthesize_and_enqueue(sentence)
+                    # Enforce concurrency cap of 2: await oldest task before creating new one.
+                    # Check interrupt/turn-id after the await.
+                    if len(pending_tasks) >= 2:
+                        oldest_task = pending_tasks.pop(0)
+                        oldest_turn_id = pending_turn_ids.pop(0)
+                        await _await_and_enqueue(oldest_task, oldest_turn_id)
+                        if self._state.interrupt or oldest_turn_id != self._current_turn_id:
+                            pipeline_event("TTS", "interrupt_drain", session=sid)
+                            for t in pending_tasks:
+                                t.cancel()
+                            pending_tasks.clear()
+                            pending_turn_ids.clear()
+                            sentence_index = 0
+                            await self._handle_interrupt()
+                            await self._drain_token_queue()
+                            continue
+
+                    task_turn_id = self._current_turn_id
+                    task = asyncio.create_task(
+                        self._synthesize_and_enqueue(sentence, sentence_index)
+                    )
+                    self._ic.register_task(task)
+                    pending_tasks.append(task)
+                    pending_turn_ids.append(task_turn_id)
+                    sentence_index += 1
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("tts_worker: unexpected error: %s", exc, exc_info=True)
+            pipeline_error("TTS", "unexpected_error", session=sid, error=str(exc))
 
-    async def _synthesize_and_enqueue(self, sentence: str) -> None:
-        """Synthesise a sentence and push WAV bytes to audio_out_queue."""
+    async def _synthesize_and_enqueue(
+        self, sentence: str, sentence_index: int
+    ) -> tuple[bytes, int] | None:
+        """Synthesise a sentence and return (wav_bytes, sentence_index), or None.
+
+        The caller is responsible for enqueuing the returned WAV bytes to
+        audio_out_queue in the correct order (required for task 5 concurrent
+        synthesis).  This method no longer puts directly into audio_out_queue.
+        """
+        sid = self._state.session_id[:8]
         try:
-            wav_bytes = await self._tts.synthesize(
+            # Apply PostProcessor.clean before synthesis (Option A: per-sentence cleaning)
+            clean_sentence = self._post_processor.clean(
                 sentence, self._state.detected_language
             )
-            await self._state.audio_out_queue.put(wav_bytes)
-            logger.debug(
-                "tts_worker: synthesised %d bytes for sentence=%r (audio_out_queue depth=%d)",
-                len(wav_bytes),
-                sentence,
-                self._state.audio_out_queue.qsize(),
+            if not clean_sentence:
+                return None
+
+            # Log ttfs_ms for the first sentence of the turn
+            if sentence_index == 0:
+                ttfs_ms = int((time.monotonic() - self._speech_end_time) * 1000)
+                pipeline_event("TTS", "first_sentence_synthesis_start", ttfs_ms=ttfs_ms)
+
+            t_synth_start = time.monotonic()
+            wav_bytes = await self._tts.synthesize(clean_sentence, self._state.detected_language)
+            synth_ms = int((time.monotonic() - t_synth_start) * 1000)
+
+            if not wav_bytes:
+                tts_log.warning("empty_wav  session=%s  sentence=%r", sid, clean_sentence[:60])
+                return None
+
+            pipeline_event(
+                "TTS", "synthesised",
+                session=sid,
+                sentence_index=sentence_index,
+                sentence=clean_sentence[:60],
+                wav_kb=len(wav_bytes) // 1024,
+                synth_ms=synth_ms,
             )
+            tts_log.info(
+                "synthesised  session=%s  sentence_index=%d  sentence=%r  "
+                "wav_bytes=%d  synth_ms=%d",
+                sid, sentence_index, clean_sentence[:60], len(wav_bytes), synth_ms,
+            )
+            return (wav_bytes, sentence_index)
+
         except Exception as exc:
-            logger.error(
-                "tts_worker: synthesis failed for sentence=%r: %s", sentence, exc
-            )
-            # Skip failed chunk; pipeline continues (Requirement 9.2)
+            pipeline_error("TTS", "synthesis_failed",
+                           session=sid, sentence=sentence[:60], error=str(exc))
+            return None
 
     async def _drain_token_queue(self) -> None:
         """Drain all remaining tokens from token_queue until the end-of-stream sentinel."""
@@ -538,8 +899,8 @@ class VoicePipeline:
             except asyncio.QueueEmpty:
                 break
         if drained:
-            logger.debug("tts_worker: drained %d WAV chunks from audio_out_queue", drained)
-        # Also flush the TTS buffer
+            pipeline_event("TTS", "queue_drained",
+                           session=self._state.session_id[:8], chunks=drained)
         self._tts.flush()
 
     # ------------------------------------------------------------------
@@ -547,31 +908,46 @@ class VoicePipeline:
     # ------------------------------------------------------------------
 
     async def _audio_output_worker(self) -> None:
-        """Drain audio_out_queue and send WAV bytes to the AudioClient.
-
-        State transitions:
-          thinking → speaking  on first WAV chunk
-          speaking → listening when queue is empty after all tokens processed
-          speaking → listening on interrupt
-        """
+        """Drain audio_out_queue and send WAV bytes to the AudioClient."""
+        sid = self._state.session_id[:8]
         try:
             first_chunk = True
+            chunk_send_time: float = 0.0
+
             while True:
-                # Check interrupt flag
                 if self._state.interrupt:
-                    logger.debug(
-                        "audio_output_worker: interrupt detected, returning to listening"
-                    )
-                    await self._set_state("listening")
-                    self._state.interrupt = False
-                    first_chunk = True
-                    # Drain any remaining audio
+                    pipeline_event("AUDIO_OUT", "interrupt_clear", session=sid)
+
+                    # Drain any queued audio chunks that must not be played.
+                    discarded = 0
                     while not self._state.audio_out_queue.empty():
                         try:
                             self._state.audio_out_queue.get_nowait()
+                            discarded += 1
                         except asyncio.QueueEmpty:
                             break
-                    await asyncio.sleep(0.05)
+
+                    # Advance the turn counter so any in-flight synthesis tasks
+                    # that complete after this drain are discarded by
+                    # _await_and_enqueue.  Only increment here if _llm_worker
+                    # has NOT already done so for this interrupt (text barge-in
+                    # path increments in _llm_worker before reaching here).
+                    if not self._llm_claimed_interrupt:
+                        self._current_turn_id += 1
+                    self._llm_claimed_interrupt = False
+
+                    pipeline_event("AUDIO_OUT", "interrupt_flush",
+                                   session=sid,
+                                   turn_id=self._ic.current_turn_id,
+                                   discarded_chunks=discarded)
+
+                    # Reset per-turn counters and clear the interrupt flag.
+                    first_chunk = True
+                    self._turn_audio_duration_ms = 0
+                    self._tts_turn_complete = False
+                    self._state.interrupt = False
+
+                    await self._set_state("listening")
                     continue
 
                 try:
@@ -579,42 +955,55 @@ class VoicePipeline:
                         self._state.audio_out_queue.get(), timeout=0.1
                     )
                 except asyncio.TimeoutError:
-                    # Queue is empty — if we were speaking, transition to listening
-                    if self._state.state == "speaking":
-                        logger.debug(
-                            "audio_output_worker: audio_out_queue empty, transitioning to listening"
+                    # Queue is empty — only consider playback done when:
+                    # 1. tts_worker has finished synthesising all sentences, AND
+                    # 2. enough wall-clock time has passed for the client to play them.
+                    if self._state.state == "speaking" and self._tts_turn_complete:
+                        elapsed_since_last_send_ms = int(
+                            (time.monotonic() - chunk_send_time) * 1000
                         )
-                        await self._set_state("listening")
-                        first_chunk = True
+                        wait_ms = self._turn_audio_duration_ms + 300
+                        if elapsed_since_last_send_ms >= wait_ms:
+                            pipeline_event("AUDIO_OUT", "playback_complete",
+                                           session=sid,
+                                           audio_duration_ms=self._turn_audio_duration_ms,
+                                           waited_ms=elapsed_since_last_send_ms)
+                            tts_log.info(
+                                "playback_complete  session=%s  audio_duration_ms=%d  "
+                                "waited_ms=%d",
+                                sid, self._turn_audio_duration_ms, elapsed_since_last_send_ms,
+                            )
+                            self._turn_audio_duration_ms = 0
+                            self._tts_turn_complete = False
+                            await self._set_state("listening")
+                            first_chunk = True
                     continue
 
-                # On first WAV chunk: transition thinking → speaking
+                # Per-chunk guard: discard if cancelled after dequeue
+                if self._ic.cancelled.is_set():
+                    logger.debug("AUDIO_OUT: discarding chunk (cancelled) session=%s", sid)
+                    continue
+
                 if first_chunk:
-                    ttfa_ms = (time.monotonic() - self._speech_end_time) * 1000
-                    logger.debug(
-                        "TTFA: %.0fms (speech_end → first_audio)", ttfa_ms
-                    )
-                    logger.debug(
-                        "audio_output_worker: first WAV chunk received, transitioning to speaking"
-                    )
+                    if self._ic.cancelled.is_set():
+                        continue  # do not send "speaking" for a cancelled turn
+                    ttfa_ms = int((time.monotonic() - self._speech_end_time) * 1000)
+                    pipeline_event("AUDIO_OUT", "first_audio_chunk",
+                                   session=sid, ttfa_ms=ttfa_ms)
+                    tts_log.info("first_chunk_sent  session=%s  ttfa_ms=%d  wav_bytes=%d",
+                                 sid, ttfa_ms, len(wav_bytes))
                     await self._set_state("speaking")
                     first_chunk = False
 
-                # Send WAV bytes to AudioClient
                 try:
                     await self._audio_ws.send_bytes(wav_bytes)
-                    logger.debug(
-                        "audio_output_worker: sent %d WAV bytes to AudioClient",
-                        len(wav_bytes),
-                    )
+                    chunk_send_time = time.monotonic()
+                    tts_log.debug("chunk_sent  session=%s  wav_bytes=%d", sid, len(wav_bytes))
                 except Exception as exc:
-                    logger.error(
-                        "audio_output_worker: failed to send WAV bytes: %s", exc
-                    )
+                    pipeline_error("AUDIO_OUT", "send_failed",
+                                   session=sid, error=str(exc))
 
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error(
-                "audio_output_worker: unexpected error: %s", exc, exc_info=True
-            )
+            pipeline_error("AUDIO_OUT", "unexpected_error", session=sid, error=str(exc))

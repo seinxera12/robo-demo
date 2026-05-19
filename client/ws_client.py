@@ -32,6 +32,9 @@ class WSClient:
         on_audio:    Callback invoked with WAV bytes when a binary frame is received.
         on_status:   Callback invoked with a state string when a status JSON message
                      is received (e.g. ``"listening"``, ``"thinking"``, ``"speaking"``).
+        on_interrupt: Optional callback invoked when the server transitions from
+                      ``"speaking"`` to ``"listening"`` mid-turn (barge-in interrupt).
+                      Used to stop local audio playback immediately.
     """
 
     def __init__(
@@ -39,11 +42,15 @@ class WSClient:
         server_url: str,
         on_audio: Callable[[bytes], None],
         on_status: Callable[[str], None],
+        on_interrupt: Callable[[], None] | None = None,
     ) -> None:
         self._server_url = server_url
         self._on_audio = on_audio
         self._on_status = on_status
+        self._on_interrupt = on_interrupt
         self._ws = None  # active websockets connection
+        self._running: bool = True  # set to False to stop the run() loop
+        self._last_state: str = ""  # track previous state to detect speaking→listening
 
     # ------------------------------------------------------------------
     # Public API
@@ -89,7 +96,8 @@ class WSClient:
             pcm16_bytes: Raw PCM16 audio bytes captured from the microphone.
         """
         if self._ws is None:
-            logger.warning("WSClient.send_audio called but not connected; dropping frame.")
+            if self._running:
+                logger.warning("WSClient.send_audio called but not connected; dropping frame.")
             return
         try:
             await self._ws.send(pcm16_bytes)
@@ -99,7 +107,8 @@ class WSClient:
     async def send_interrupt(self) -> None:
         """Send a JSON interrupt control message to the server."""
         if self._ws is None:
-            logger.warning("WSClient.send_interrupt called but not connected; dropping.")
+            if self._running:
+                logger.warning("WSClient.send_interrupt called but not connected; dropping.")
             return
         try:
             await self._ws.send(json.dumps({"type": "interrupt"}))
@@ -111,9 +120,9 @@ class WSClient:
         """Main receive loop — connects and dispatches incoming frames.
 
         Reconnects with exponential backoff on disconnect. Stops after
-        exhausting all reconnect attempts.
+        exhausting all reconnect attempts or when ``close()`` is called.
         """
-        while True:
+        while self._running:
             try:
                 await self.connect()
                 await self._receive_loop()
@@ -121,9 +130,24 @@ class WSClient:
                 # All reconnect attempts exhausted inside connect()
                 logger.error("WSClient giving up: %s", exc)
                 return
+            except asyncio.CancelledError:
+                logger.info("WSClient.run() cancelled.")
+                return
             except Exception as exc:
                 logger.warning("WSClient disconnected unexpectedly: %s", exc)
                 # connect() will handle the backoff on the next iteration
+
+    async def close(self) -> None:
+        """Stop the run loop and close the active WebSocket connection."""
+        self._running = False
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            finally:
+                self._ws = None
+        logger.info("WSClient closed.")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -154,6 +178,14 @@ class WSClient:
         if msg_type == "status":
             state = msg.get("state", "")
             logger.debug("WSClient received status: %s", state)
+            # Detect a server-side barge-in interrupt: speaking → listening.
+            # This happens when the server interrupts TTS due to new text input.
+            # Fire on_interrupt so the client can stop local audio playback immediately.
+            if state == "listening" and self._last_state == "speaking":
+                logger.debug("WSClient detected speaking→listening interrupt — stopping playback.")
+                if self._on_interrupt is not None:
+                    self._on_interrupt()
+            self._last_state = state
             self._on_status(state)
         else:
             # Log other message types at debug level; they are not consumed here

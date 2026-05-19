@@ -1,0 +1,6 @@
+2026-05-18 16:53:45 | search_start  query='Current weather in Kathmandu'
+2026-05-18 16:53:48 | search_done  results=5  context_chars=1787  latency_ms=2485
+2026-05-18 17:03:02 | search_start  query='東京の現在の天気'
+2026-05-18 17:03:04 | search_done  results=5  context_chars=2430  latency_ms=1984
+2026-05-18 17:04:16 | search_start  query='User wants to know the current time'
+2026-05-18 17:04:18 | search_done  results=5  context_chars=941  latency_ms=2093

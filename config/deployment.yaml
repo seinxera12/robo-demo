@@ -1,0 +1,41 @@
+# Robo Deployment Configuration
+# This file configures the voice assistant for a specific deployment environment
+
+# Unique identifier for this deployment
+deployment_id: "default"
+
+# Deployment type: reception, enterprise, or desktop
+deployment_type: "desktop"
+
+# Human-readable location name
+location_name: "Robo Assistant"
+
+# Primary language for this deployment (ja or en)
+language_primary: "en"
+
+# Secondary/fallback language (ja or en)
+language_secondary: "ja"
+
+# Optional tone override: null, "formal", or "casual"
+# When set to "formal" for Japanese, uses lang_ja_formal.txt if available
+tone_override: null
+
+# Environment-specific documentation files for RAG retrieval
+# Each entry should have a "path" key pointing to a markdown or text file
+environment_docs: []
+  # Example:
+  # - path: "docs/floor_map.md"
+  # - path: "docs/company_info.md"
+
+# Number of conversation turns to keep in session memory (default: 6)
+# Each turn is one user message + one assistant response
+session_memory_turns: 6
+
+# Enable web search capability via Tavily API
+web_search_enabled: true
+
+# Out-of-scope responses by language
+# These are used when the user asks something the assistant cannot handle
+out_of_scope_response:
+  ja: "申し訳ありませんが、それについてはお答えできません。"
+  en: "I'm sorry, I can't help with that."
