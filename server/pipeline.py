@@ -442,6 +442,20 @@ class VoicePipeline:
 
                 await self._state.transcript_queue.put(result)
 
+                # Deactivate robo_active immediately after the audio is captured and
+                # forwarded.  This prevents the mic from accepting further voice input
+                # while the LLM is generating — the user must press the button again
+                # for the next voice turn.  Without this, any trailing audio or ambient
+                # sound during "thinking" state would trigger a spurious barge-in.
+                if self._state.robo_active:
+                    self._state.robo_active = False
+                    pipeline_event("ROBO", "auto_deactivated_after_stt",
+                                   session=sid)
+                    await self._broadcast({"type": "robo_deactivated"})
+                    await self._send_to_audio_client(
+                        json.dumps({"type": "robo_deactivated"})
+                    )
+
         except asyncio.CancelledError:
             raise
         except Exception as exc:

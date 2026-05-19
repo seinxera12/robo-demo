@@ -21,7 +21,12 @@ logger = logging.getLogger(__name__)
 SAMPLE_RATE = 16_000          # Hz
 FRAME_SAMPLES = 512           # 32ms at 16 kHz
 FRAME_MS = 32                 # milliseconds per frame
-SPEECH_THRESHOLD = 0.5        # probability threshold for speech detection
+SPEECH_THRESHOLD = 0.3        # probability threshold for speech detection.
+                              # Silero VAD scores Japanese and other non-English
+                              # languages lower than English — 0.3 is the
+                              # recommended multilingual threshold per the Silero
+                              # VAD paper.  0.5 causes Japanese frames to be
+                              # silently dropped, leaving the button stuck open.
 
 # Barge-in protection: minimum seconds after set_speaking(True) before a
 # barge-in can fire.  Prevents the TTS speaker output from feeding back into
