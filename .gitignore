@@ -4,6 +4,7 @@
 # Logs
 logging/
 logs_permanent
+logs/
 
 # Python virtual environment
 venv/
