@@ -441,15 +441,21 @@ async def test_7_5_interrupt_mid_stream():
 
     tokens_yielded = [0]
 
+    # ic_holder lets the generator access the InterruptController after pipeline creation
+    ic_holder: list = []
+
     async def _interruptible_gen(messages, max_tokens=None, temperature=None):
         for i, tok in enumerate(all_tokens):
             if i == interrupt_after:
-                # Simulate barge-in: set interrupt flag before yielding this token
+                # Simulate barge-in: set both the legacy flag and the IC cancelled event
                 state.interrupt = True
+                if ic_holder:
+                    ic_holder[0].request_interrupt(source="test_barge_in")
             yield tok
             tokens_yielded[0] = i + 1
 
     pipeline, _ = _make_pipeline(state, _interruptible_gen)
+    ic_holder.append(pipeline._ic)
     queue_items = await _run_one_turn(all_tokens, state, pipeline)
 
     # END_OF_TOKENS must be present (worker must unblock tts_worker)
