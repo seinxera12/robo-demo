@@ -1,0 +1,18 @@
+example of interaction : 
+
+U1: Hello
+
+U2: h
+
+U3: h
+
+U4: h
+
+A1: Hello, how can I help you today?I'm sorry, I didn't quite understand that. Could you please rephrase?I'm sorry, I didn't quite understand that. Could you please rephrase?I'm sorry, I didn't quite understand that. Could you please rephrase?
+
+U5: hello
+
+A2: Hello again, is there something I can help you with or would you like to chat?
+
+
+
