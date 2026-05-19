@@ -1,0 +1,6 @@
+2026-05-18 17:37:25 | init_pipeline  engine=KokoroTTS  lang=en
+2026-05-18 17:37:25 | init_pipeline  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 17:37:29 | pipeline_ready  engine=KokoroTTS  lang=en
+2026-05-18 17:37:30 | warm_up_complete  engine=KokoroTTS  voice=af_heart
+2026-05-18 17:37:31 | pipeline_ready  engine=KokoroJapaneseTTS  lang=ja
+2026-05-18 17:37:32 | warm_up_complete  engine=KokoroJapaneseTTS  voice=jf_alpha

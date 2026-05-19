@@ -70,6 +70,11 @@ class AudioPlayback:
                 # Sentinel value — stop the loop
                 break
 
+            # Skip playback if stop() was called while we were waiting
+            if not self._running:
+                self._queue.task_done()
+                break
+
             await self._play_wav(wav_bytes)
             self._queue.task_done()
 
@@ -81,8 +86,30 @@ class AudioPlayback:
 
         logger.info("AudioPlayback stopped.")
 
+    def interrupt(self) -> None:
+        """Interrupt current playback for a barge-in: drain queued chunks and
+        halt sounddevice immediately, but keep the run() loop alive so future
+        turns can still play audio.
+
+        Use this as the WSClient.on_interrupt callback — it stops the current
+        audio without killing the playback loop.
+        """
+        # Drain pending chunks so stale audio is not played after the interrupt
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except asyncio.QueueEmpty:
+                break
+        self.stop_stream()
+        logger.debug("AudioPlayback interrupted (stream stopped, queue cleared, loop alive).")
+
     def stop(self) -> None:
-        """Stop playback immediately and clear the queue."""
+        """Stop playback permanently: set _running=False, drain queue, halt sounddevice.
+
+        Use this only for full shutdown (e.g. process exit). For barge-in
+        interrupts use interrupt() instead so the loop stays alive.
+        """
         self._running = False
         # Drain the queue so pending chunks are discarded
         while not self._queue.empty():
@@ -91,7 +118,16 @@ class AudioPlayback:
                 self._queue.task_done()
             except asyncio.QueueEmpty:
                 break
+        self.stop_stream()
         logger.debug("AudioPlayback stopped and queue cleared.")
+
+    def stop_stream(self) -> None:
+        """Halt the currently playing sounddevice stream immediately."""
+        try:
+            import sounddevice as sd
+            sd.stop()
+        except Exception as exc:
+            logger.debug("AudioPlayback.stop_stream: %s", exc)
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -1,0 +1,413 @@
+2026-05-18 16:00:54 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 16:00:57 | WS         | audio_client_connected | session=2f4050bd
+2026-05-18 16:00:57 | ─────────────────────────── SESSION 2f4050bd ───────────────────────────
+2026-05-18 16:00:57 | SESSION    | started              | session=2f4050bd
+2026-05-18 16:01:01 | WS         | text_input_received  | text=Hello
+2026-05-18 16:01:01 | LLM        | turn_start           | session=2f4050bd  query=Hello  history_turns=0
+2026-05-18 16:01:01 | WS         | text_input_received  | text=h
+2026-05-18 16:01:02 | WS         | text_input_received  | text=h
+2026-05-18 16:01:02 | WS         | text_input_received  | text=h
+2026-05-18 16:01:02 | LLM        | call1_intent_classified | session=2f4050bd  intent=general  language=en  confidence=0.9  ttft_ms=484
+2026-05-18 16:01:02 | LLM        | routed               | session=2f4050bd  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:01:02 | LLM        | call2_first_token    | session=2f4050bd  ttft_ms=625
+2026-05-18 16:01:02 | TTS        | first_sentence_synthesis_start | ttfs_ms=640
+2026-05-18 16:01:02 | LLM        | turn_complete        | session=2f4050bd  response_preview="Hello, how can I help you today?"
+2026-05-18 16:01:02 | LLM        | turn_start           | session=2f4050bd  query=h  history_turns=1
+2026-05-18 16:01:02 | LLM        | call1_intent_classified | session=2f4050bd  intent=general  language=unknown  confidence=0.2  ttft_ms=468
+2026-05-18 16:01:02 | LLM        | routed               | session=2f4050bd  route_type=clarify  has_direct_response=True  has_context=False
+2026-05-18 16:01:02 | LLM        | direct_response      | session=2f4050bd  route_type=clarify  response_preview="I'm sorry, I didn't quite understand that. Could you please "
+2026-05-18 16:01:02 | LLM        | turn_start           | session=2f4050bd  query=h  history_turns=2
+2026-05-18 16:01:03 | LLM        | call1_intent_classified | session=2f4050bd  intent=general  language=unknown  confidence=0.2  ttft_ms=390
+2026-05-18 16:01:03 | LLM        | routed               | session=2f4050bd  route_type=clarify  has_direct_response=True  has_context=False
+2026-05-18 16:01:03 | LLM        | direct_response      | session=2f4050bd  route_type=clarify  response_preview="I'm sorry, I didn't quite understand that. Could you please "
+2026-05-18 16:01:03 | LLM        | turn_start           | session=2f4050bd  query=h  history_turns=3
+2026-05-18 16:01:03 | LLM        | call1_intent_classified | session=2f4050bd  intent=general  language=unknown  confidence=0.2  ttft_ms=406
+2026-05-18 16:01:03 | LLM        | routed               | session=2f4050bd  route_type=clarify  has_direct_response=True  has_context=False
+2026-05-18 16:01:03 | LLM        | direct_response      | session=2f4050bd  route_type=clarify  response_preview="I'm sorry, I didn't quite understand that. Could you please "
+2026-05-18 16:01:06 | TTS        | synthesised          | session=2f4050bd  sentence_index=0  sentence="Hello, how can I help you today?"  wav_kb=109  synth_ms=3577
+2026-05-18 16:01:06 | TTS        | first_wav_enqueued   | tts_enqueue_ms=2686
+2026-05-18 16:01:06 | AUDIO_OUT  | first_audio_chunk    | session=2f4050bd  ttfa_ms=2702
+2026-05-18 16:01:06 | STATE      | listening → speaking | session=2f4050bd
+2026-05-18 16:01:06 | TTS        | first_sentence_synthesis_start | ttfs_ms=2702
+2026-05-18 16:01:07 | TTS        | synthesised          | session=2f4050bd  sentence_index=0  sentence="I'm sorry,"  wav_kb=70  synth_ms=1781
+2026-05-18 16:01:07 | TTS        | first_wav_enqueued   | tts_enqueue_ms=4484
+2026-05-18 16:01:09 | TTS        | synthesised          | session=2f4050bd  sentence_index=1  sentence="I didn't quite understand that. Could you please rephrase?"  wav_kb=168  synth_ms=3843
+2026-05-18 16:01:09 | TTS        | first_sentence_synthesis_start | ttfs_ms=6577
+2026-05-18 16:01:11 | TTS        | synthesised          | session=2f4050bd  sentence_index=0  sentence="I'm sorry,"  wav_kb=70  synth_ms=1656
+2026-05-18 16:01:11 | TTS        | first_wav_enqueued   | tts_enqueue_ms=8234
+2026-05-18 16:01:13 | WS         | text_input_received  | text=hello
+2026-05-18 16:01:13 | WS         | text_input_barge_in  | session=2f4050bd  text=hello
+2026-05-18 16:01:13 | LLM        | turn_start           | session=2f4050bd  query=hello  history_turns=4
+2026-05-18 16:01:13 | AUDIO_OUT  | interrupt_clear      | session=2f4050bd
+2026-05-18 16:01:13 | STATE      | speaking → listening | session=2f4050bd
+2026-05-18 16:01:13 | TTS        | synthesised          | session=2f4050bd  sentence_index=1  sentence="I didn't quite understand that. Could you please rephrase?"  wav_kb=168  synth_ms=3422
+2026-05-18 16:01:13 | TTS        | first_sentence_synthesis_start | ttfs_ms=140
+2026-05-18 16:01:13 | AUDIO_OUT  | first_audio_chunk    | session=2f4050bd  ttfa_ms=155
+2026-05-18 16:01:13 | STATE      | listening → speaking | session=2f4050bd
+2026-05-18 16:01:13 | LLM        | call1_intent_classified | session=2f4050bd  intent=general  language=en  confidence=0.9  ttft_ms=561
+2026-05-18 16:01:13 | LLM        | routed               | session=2f4050bd  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:01:14 | LLM        | call2_first_token    | session=2f4050bd  ttft_ms=1186
+2026-05-18 16:01:14 | LLM        | turn_complete        | session=2f4050bd  response_preview="Hello again, is there something I can help you with or would"
+2026-05-18 16:01:15 | TTS        | synthesised          | session=2f4050bd  sentence_index=0  sentence="I'm sorry,"  wav_kb=70  synth_ms=1952
+2026-05-18 16:01:15 | TTS        | first_wav_enqueued   | tts_enqueue_ms=2093
+2026-05-18 16:01:17 | TTS        | synthesised          | session=2f4050bd  sentence_index=1  sentence="I didn't quite understand that. Could you please rephrase?"  wav_kb=168  synth_ms=4077
+2026-05-18 16:01:17 | TTS        | first_sentence_synthesis_start | ttfs_ms=4234
+2026-05-18 16:01:19 | TTS        | synthesised          | session=2f4050bd  sentence_index=0  sentence="Hello again,"  wav_kb=73  synth_ms=1734
+2026-05-18 16:01:19 | TTS        | first_wav_enqueued   | tts_enqueue_ms=5968
+2026-05-18 16:01:20 | TTS        | synthesised          | session=2f4050bd  sentence_index=1  sentence="is there something I can help you with or would you like to "  wav_kb=179  synth_ms=2938
+2026-05-18 16:01:34 | AUDIO_OUT  | playback_complete    | session=2f4050bd  audio_duration_ms=14100  waited_ms=14405
+2026-05-18 16:01:34 | STATE      | speaking → listening | session=2f4050bd
+2026-05-18 16:01:53 | STT        | audio_dropped_robo_idle | session=2f4050bd
+2026-05-18 16:02:49 | AUDIO_IN   | client_disconnected  | session=2f4050bd
+2026-05-18 16:02:49 | AUDIO_IN   | shutting_down_pipeline | session=2f4050bd
+2026-05-18 16:02:49 | SESSION    | stopped              | session=2f4050bd
+2026-05-18 16:02:49 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:02:49 | SESSION    | stopped              | session=2f4050bd
+2026-05-18 16:02:49 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:02:50 | SERVER     | shutdown             | active_sessions=0
+2026-05-18 16:23:26 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 16:23:27 | WS         | audio_client_connected | session=6a237c2b
+2026-05-18 16:23:27 | ─────────────────────────── SESSION 6a237c2b ───────────────────────────
+2026-05-18 16:23:27 | SESSION    | started              | session=6a237c2b
+2026-05-18 16:23:30 | WS         | text_input_received  | text=Hello
+2026-05-18 16:23:30 | LLM        | turn_start           | session=6a237c2b  query=Hello  history_turns=0
+2026-05-18 16:23:30 | STATE      | listening → thinking | session=6a237c2b
+2026-05-18 16:23:30 | LLM        | call1_intent_classified | session=6a237c2b  intent=general  language=unknown  confidence=0.5  ttft_ms=328
+2026-05-18 16:23:30 | LLM        | routed               | session=6a237c2b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:23:30 | LLM        | call2_first_token    | session=6a237c2b  ttft_ms=515
+2026-05-18 16:23:30 | LLM        | turn_complete        | session=6a237c2b  response_preview="I'm having trouble connecting right now. Please try again in"
+2026-05-18 16:23:30 | TTS        | first_sentence_synthesis_start | ttfs_ms=531
+2026-05-18 16:23:33 | TTS        | synthesised          | session=6a237c2b  sentence_index=1  sentence="Please try again in a moment."  wav_kb=99  synth_ms=2953
+2026-05-18 16:23:33 | TTS        | synthesised          | session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_kb=126  synth_ms=3000
+2026-05-18 16:23:33 | TTS        | first_wav_enqueued   | tts_enqueue_ms=3531
+2026-05-18 16:23:33 | AUDIO_OUT  | first_audio_chunk    | session=6a237c2b  ttfa_ms=3531
+2026-05-18 16:23:33 | STATE      | thinking → speaking  | session=6a237c2b
+2026-05-18 16:23:38 | WS         | text_input_received  | text=Hello
+2026-05-18 16:23:38 | WS         | text_input_barge_in  | session=6a237c2b  text=Hello
+2026-05-18 16:23:38 | LLM        | turn_start           | session=6a237c2b  query=Hello  history_turns=1
+2026-05-18 16:23:38 | STATE      | speaking → thinking  | session=6a237c2b
+2026-05-18 16:23:39 | AUDIO_OUT  | interrupt_clear      | session=6a237c2b
+2026-05-18 16:23:39 | STATE      | thinking → listening | session=6a237c2b
+2026-05-18 16:23:39 | LLM        | call1_intent_classified | session=6a237c2b  intent=general  language=unknown  confidence=0.5  ttft_ms=234
+2026-05-18 16:23:39 | LLM        | routed               | session=6a237c2b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:23:39 | LLM        | call2_first_token    | session=6a237c2b  ttft_ms=436
+2026-05-18 16:23:39 | LLM        | turn_complete        | session=6a237c2b  response_preview="I'm having trouble connecting right now. Please try again in"
+2026-05-18 16:23:39 | TTS        | first_sentence_synthesis_start | ttfs_ms=436
+2026-05-18 16:23:40 | TTS        | synthesised          | session=6a237c2b  sentence_index=1  sentence="Please try again in a moment."  wav_kb=99  synth_ms=1375
+2026-05-18 16:23:40 | TTS        | synthesised          | session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_kb=126  synth_ms=1469
+2026-05-18 16:23:40 | TTS        | first_wav_enqueued   | tts_enqueue_ms=1906
+2026-05-18 16:23:40 | AUDIO_OUT  | first_audio_chunk    | session=6a237c2b  ttfa_ms=1906
+2026-05-18 16:23:40 | STATE      | listening → speaking | session=6a237c2b
+2026-05-18 16:23:46 | AUDIO_OUT  | playback_complete    | session=6a237c2b  audio_duration_ms=4825  waited_ms=5186
+2026-05-18 16:23:46 | STATE      | speaking → listening | session=6a237c2b
+2026-05-18 16:23:55 | WS         | text_input_received  | text=hello
+2026-05-18 16:23:55 | LLM        | turn_start           | session=6a237c2b  query=hello  history_turns=2
+2026-05-18 16:23:55 | STATE      | listening → thinking | session=6a237c2b
+2026-05-18 16:23:55 | LLM        | call1_intent_classified | session=6a237c2b  intent=general  language=unknown  confidence=0.5  ttft_ms=265
+2026-05-18 16:23:55 | LLM        | routed               | session=6a237c2b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:23:55 | LLM        | call2_first_token    | session=6a237c2b  ttft_ms=468
+2026-05-18 16:23:55 | LLM        | turn_complete        | session=6a237c2b  response_preview="I'm having trouble connecting right now. Please try again in"
+2026-05-18 16:23:55 | TTS        | first_sentence_synthesis_start | ttfs_ms=468
+2026-05-18 16:23:57 | TTS        | synthesised          | session=6a237c2b  sentence_index=1  sentence="Please try again in a moment."  wav_kb=99  synth_ms=2219
+2026-05-18 16:23:58 | TTS        | synthesised          | session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_kb=126  synth_ms=2750
+2026-05-18 16:23:58 | TTS        | first_wav_enqueued   | tts_enqueue_ms=3218
+2026-05-18 16:23:58 | AUDIO_OUT  | first_audio_chunk    | session=6a237c2b  ttfa_ms=3218
+2026-05-18 16:23:58 | STATE      | thinking → speaking  | session=6a237c2b
+2026-05-18 16:23:59 | WS         | text_input_received  | text=hel
+2026-05-18 16:23:59 | WS         | text_input_barge_in  | session=6a237c2b  text=hel
+2026-05-18 16:23:59 | LLM        | turn_start           | session=6a237c2b  query=hel  history_turns=3
+2026-05-18 16:23:59 | STATE      | speaking → thinking  | session=6a237c2b
+2026-05-18 16:23:59 | AUDIO_OUT  | interrupt_clear      | session=6a237c2b
+2026-05-18 16:23:59 | STATE      | thinking → listening | session=6a237c2b
+2026-05-18 16:23:59 | LLM        | call1_intent_classified | session=6a237c2b  intent=general  language=unknown  confidence=0.5  ttft_ms=109
+2026-05-18 16:23:59 | LLM        | routed               | session=6a237c2b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:24:00 | LLM        | call2_first_token    | session=6a237c2b  ttft_ms=359
+2026-05-18 16:24:00 | LLM        | turn_complete        | session=6a237c2b  response_preview="I'm having trouble connecting right now. Please try again in"
+2026-05-18 16:24:00 | TTS        | first_sentence_synthesis_start | ttfs_ms=359
+2026-05-18 16:24:02 | TTS        | synthesised          | session=6a237c2b  sentence_index=1  sentence="Please try again in a moment."  wav_kb=99  synth_ms=2702
+2026-05-18 16:24:03 | TTS        | synthesised          | session=6a237c2b  sentence_index=0  sentence="I'm having trouble connecting right now."  wav_kb=126  synth_ms=2890
+2026-05-18 16:24:03 | TTS        | first_wav_enqueued   | tts_enqueue_ms=3250
+2026-05-18 16:24:03 | AUDIO_OUT  | first_audio_chunk    | session=6a237c2b  ttfa_ms=3250
+2026-05-18 16:24:03 | STATE      | listening → speaking | session=6a237c2b
+2026-05-18 16:24:08 | AUDIO_OUT  | playback_complete    | session=6a237c2b  audio_duration_ms=4825  waited_ms=5125
+2026-05-18 16:24:08 | STATE      | speaking → listening | session=6a237c2b
+2026-05-18 16:25:17 | STT        | audio_dropped_robo_idle | session=6a237c2b
+2026-05-18 16:26:33 | AUDIO_IN   | client_disconnected  | session=6a237c2b
+2026-05-18 16:26:33 | AUDIO_IN   | shutting_down_pipeline | session=6a237c2b
+2026-05-18 16:26:33 | SESSION    | stopped              | session=6a237c2b
+2026-05-18 16:26:33 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:26:33 | SESSION    | stopped              | session=6a237c2b
+2026-05-18 16:26:33 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:26:33 | SERVER     | shutdown             | active_sessions=0
+2026-05-18 16:26:51 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 16:26:54 | WS         | audio_client_connected | session=d4fa5931
+2026-05-18 16:26:54 | ─────────────────────────── SESSION d4fa5931 ───────────────────────────
+2026-05-18 16:26:54 | SESSION    | started              | session=d4fa5931
+2026-05-18 16:27:07 | WS         | text_input_received  | text=Hello
+2026-05-18 16:27:07 | LLM        | turn_start           | session=d4fa5931  query=Hello  history_turns=0
+2026-05-18 16:27:07 | STATE      | listening → thinking | session=d4fa5931
+2026-05-18 16:27:07 | LLM        | call1_intent_classified | session=d4fa5931  intent=general  language=en  confidence=0.8  ttft_ms=625
+2026-05-18 16:27:07 | LLM        | routed               | session=d4fa5931  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:27:07 | LLM        | call2_first_token    | session=d4fa5931  ttft_ms=938
+2026-05-18 16:27:07 | LLM        | turn_complete        | session=d4fa5931  response_preview="Hello, how can I help you today?"
+2026-05-18 16:27:07 | TTS        | first_sentence_synthesis_start | ttfs_ms=938
+2026-05-18 16:27:12 | TTS        | synthesised          | session=d4fa5931  sentence_index=0  sentence="Hello, how can I help you today?"  wav_kb=109  synth_ms=4671
+2026-05-18 16:27:12 | TTS        | first_wav_enqueued   | tts_enqueue_ms=5609
+2026-05-18 16:27:12 | AUDIO_OUT  | first_audio_chunk    | session=d4fa5931  ttfa_ms=5609
+2026-05-18 16:27:12 | STATE      | thinking → speaking  | session=d4fa5931
+2026-05-18 16:27:15 | AUDIO_OUT  | playback_complete    | session=d4fa5931  audio_duration_ms=2325  waited_ms=2702
+2026-05-18 16:27:15 | STATE      | speaking → listening | session=d4fa5931
+2026-05-18 16:27:25 | WS         | text_input_received  | text="Can you tell me a short story?"
+2026-05-18 16:27:25 | LLM        | turn_start           | session=d4fa5931  query="Can you tell me a short story?"  history_turns=1
+2026-05-18 16:27:25 | STATE      | listening → thinking | session=d4fa5931
+2026-05-18 16:27:25 | LLM        | call1_intent_classified | session=d4fa5931  intent=general  language=en  confidence=0.9  ttft_ms=405
+2026-05-18 16:27:25 | LLM        | routed               | session=d4fa5931  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:27:25 | LLM        | call2_first_token    | session=d4fa5931  ttft_ms=827
+2026-05-18 16:27:26 | TTS        | first_sentence_synthesis_start | ttfs_ms=1859
+2026-05-18 16:27:27 | LLM        | turn_complete        | session=d4fa5931  response_preview="I'd be happy to tell you a story. Once upon a time, in a sma"
+2026-05-18 16:27:29 | TTS        | synthesised          | session=d4fa5931  sentence_index=0  sentence="I'd be happy to tell you a story."  wav_kb=110  synth_ms=2171
+2026-05-18 16:27:29 | TTS        | first_wav_enqueued   | tts_enqueue_ms=4030
+2026-05-18 16:27:29 | AUDIO_OUT  | first_audio_chunk    | session=d4fa5931  ttfa_ms=4030
+2026-05-18 16:27:29 | STATE      | thinking → speaking  | session=d4fa5931
+2026-05-18 16:27:29 | TTS        | synthesised          | session=d4fa5931  sentence_index=1  sentence="Once upon a time,"  wav_kb=85  synth_ms=2264
+2026-05-18 16:27:31 | TTS        | synthesised          | session=d4fa5931  sentence_index=2  sentence="in a small village,"  wav_kb=82  synth_ms=1953
+2026-05-18 16:27:32 | TTS        | synthesised          | session=d4fa5931  sentence_index=3  sentence="there was a little rabbit who loved to explore and go on adv"  wav_kb=196  synth_ms=3641
+2026-05-18 16:27:34 | TTS        | synthesised          | session=d4fa5931  sentence_index=4  sentence="Would you like to hear more about what the rabbit did?"  wav_kb=150  synth_ms=3202
+2026-05-18 16:27:36 | WS         | text_input_received  | text=hello
+2026-05-18 16:27:36 | WS         | text_input_barge_in  | session=d4fa5931  text=hello
+2026-05-18 16:27:36 | LLM        | turn_start           | session=d4fa5931  query=hello  history_turns=2
+2026-05-18 16:27:36 | STATE      | speaking → thinking  | session=d4fa5931
+2026-05-18 16:27:36 | AUDIO_OUT  | interrupt_clear      | session=d4fa5931
+2026-05-18 16:27:36 | STATE      | thinking → listening | session=d4fa5931
+2026-05-18 16:27:36 | LLM        | call1_intent_classified | session=d4fa5931  intent=general  language=en  confidence=0.9  ttft_ms=422
+2026-05-18 16:27:36 | LLM        | routed               | session=d4fa5931  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:27:36 | LLM        | call2_first_token    | session=d4fa5931  ttft_ms=813
+2026-05-18 16:27:37 | TTS        | first_sentence_synthesis_start | ttfs_ms=844
+2026-05-18 16:27:37 | LLM        | turn_complete        | session=d4fa5931  response_preview="We already said hello, didn't we? You asked me to tell you a"
+2026-05-18 16:27:39 | TTS        | synthesised          | session=d4fa5931  sentence_index=0  sentence="We already said hello, didn't we?"  wav_kb=109  synth_ms=2577
+2026-05-18 16:27:39 | TTS        | first_wav_enqueued   | tts_enqueue_ms=3422
+2026-05-18 16:27:39 | AUDIO_OUT  | first_audio_chunk    | session=d4fa5931  ttfa_ms=3422
+2026-05-18 16:27:39 | STATE      | listening → speaking | session=d4fa5931
+2026-05-18 16:27:39 | TTS        | synthesised          | session=d4fa5931  sentence_index=1  sentence="You asked me to tell you a story,"  wav_kb=106  synth_ms=2734
+2026-05-18 16:27:44 | TTS        | synthesised          | session=d4fa5931  sentence_index=2  sentence="and I started telling you about a little rabbit would you li"  wav_kb=233  synth_ms=4797
+2026-05-18 16:27:54 | AUDIO_OUT  | playback_complete    | session=d4fa5931  audio_duration_ms=9575  waited_ms=9968
+2026-05-18 16:27:54 | STATE      | speaking → listening | session=d4fa5931
+2026-05-18 16:27:59 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:29:15 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:30:17 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:31:22 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:32:51 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:34:12 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:35:17 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:36:32 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:37:34 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:38:43 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:40:33 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:41:34 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:42:35 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:43:39 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:44:40 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:45:43 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:47:41 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:48:43 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:49:54 | STT        | audio_dropped_robo_idle | session=d4fa5931
+2026-05-18 16:50:42 | AUDIO_IN   | client_disconnected  | session=d4fa5931
+2026-05-18 16:50:42 | AUDIO_IN   | shutting_down_pipeline | session=d4fa5931
+2026-05-18 16:50:42 | SESSION    | stopped              | session=d4fa5931
+2026-05-18 16:50:42 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:50:42 | SESSION    | stopped              | session=d4fa5931
+2026-05-18 16:50:42 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:50:42 | SERVER     | shutdown             | active_sessions=0
+2026-05-18 16:51:25 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 16:51:25 | WS         | audio_client_connected | session=c02b4546
+2026-05-18 16:51:25 | ─────────────────────────── SESSION c02b4546 ───────────────────────────
+2026-05-18 16:51:25 | SESSION    | started              | session=c02b4546
+2026-05-18 16:51:43 | STT        | audio_dropped_robo_idle | session=c02b4546
+2026-05-18 16:53:28 | WS         | text_input_received  | text=Hello.
+2026-05-18 16:53:28 | LLM        | turn_start           | session=c02b4546  query=Hello.  history_turns=0
+2026-05-18 16:53:28 | STATE      | listening → thinking | session=c02b4546
+2026-05-18 16:53:29 | LLM        | call1_intent_classified | session=c02b4546  intent=general  language=en  confidence=0.9  ttft_ms=422
+2026-05-18 16:53:29 | LLM        | routed               | session=c02b4546  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:53:29 | LLM        | call2_first_token    | session=c02b4546  ttft_ms=859
+2026-05-18 16:53:29 | LLM        | turn_complete        | session=c02b4546  response_preview="Hello, how can I help you today?"
+2026-05-18 16:53:29 | TTS        | first_sentence_synthesis_start | ttfs_ms=875
+2026-05-18 16:53:33 | TTS        | synthesised          | session=c02b4546  sentence_index=0  sentence="Hello, how can I help you today?"  wav_kb=109  synth_ms=4297
+2026-05-18 16:53:33 | TTS        | first_wav_enqueued   | tts_enqueue_ms=5172
+2026-05-18 16:53:33 | AUDIO_OUT  | first_audio_chunk    | session=c02b4546  ttfa_ms=5187
+2026-05-18 16:53:33 | STATE      | thinking → speaking  | session=c02b4546
+2026-05-18 16:53:36 | AUDIO_OUT  | playback_complete    | session=c02b4546  audio_duration_ms=2325  waited_ms=2640
+2026-05-18 16:53:36 | STATE      | speaking → listening | session=c02b4546
+2026-05-18 16:53:44 | WS         | text_input_received  | text="Can you tell me the weather of Kathmandu right now?"
+2026-05-18 16:53:44 | LLM        | turn_start           | session=c02b4546  query="Can you tell me the weather of Kathmandu right now?"  history_turns=1
+2026-05-18 16:53:44 | STATE      | listening → thinking | session=c02b4546
+2026-05-18 16:53:45 | LLM        | call1_intent_classified | session=c02b4546  intent=web_search  language=en  confidence=0.9  ttft_ms=1000
+2026-05-18 16:53:48 | LLM        | routed               | session=c02b4546  route_type=web_search  has_direct_response=False  has_context=True
+2026-05-18 16:53:48 | LLM        | call2_first_token    | session=c02b4546  ttft_ms=3796
+2026-05-18 16:53:48 | TTS        | first_sentence_synthesis_start | ttfs_ms=3842
+2026-05-18 16:53:48 | LLM        | turn_complete        | session=c02b4546  response_preview="In Kathmandu right now, it's partly cloudy with a temperatur"
+2026-05-18 16:53:50 | TTS        | synthesised          | session=c02b4546  sentence_index=0  sentence="In Kathmandu right now,"  wav_kb=93  synth_ms=2454
+2026-05-18 16:53:50 | TTS        | first_wav_enqueued   | tts_enqueue_ms=6296
+2026-05-18 16:53:50 | AUDIO_OUT  | first_audio_chunk    | session=c02b4546  ttfa_ms=6296
+2026-05-18 16:53:50 | STATE      | thinking → speaking  | session=c02b4546
+2026-05-18 16:53:52 | TTS        | synthesised          | session=c02b4546  sentence_index=1  sentence="it's partly cloudy with a temperature of around 28 degrees C"  wav_kb=207  synth_ms=4171
+2026-05-18 16:53:53 | TTS        | synthesised          | session=c02b4546  sentence_index=2  sentence="or 83 degrees Fahrenheit."  wav_kb=113  synth_ms=2609
+2026-05-18 16:53:56 | TTS        | synthesised          | session=c02b4546  sentence_index=3  sentence="Would you like to know more about the current weather condit"  wav_kb=213  synth_ms=3594
+2026-05-18 16:53:58 | AUDIO_IN   | interrupt_received   | session=c02b4546  via=text
+2026-05-18 16:53:58 | AUDIO_OUT  | interrupt_clear      | session=c02b4546
+2026-05-18 16:53:58 | STATE      | speaking → listening | session=c02b4546
+2026-05-18 16:54:24 | WS         | text_input_received  | text="are you sure?"
+2026-05-18 16:54:24 | LLM        | turn_start           | session=c02b4546  query="are you sure?"  history_turns=2
+2026-05-18 16:54:24 | STATE      | listening → thinking | session=c02b4546
+2026-05-18 16:54:24 | LLM        | call1_intent_classified | session=c02b4546  intent=general  language=en  confidence=0.8  ttft_ms=655
+2026-05-18 16:54:24 | LLM        | routed               | session=c02b4546  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:54:25 | LLM        | call2_first_token    | session=c02b4546  ttft_ms=937
+2026-05-18 16:54:25 | TTS        | first_sentence_synthesis_start | ttfs_ms=968
+2026-05-18 16:54:25 | LLM        | turn_complete        | session=c02b4546  response_preview="I don't have realtime access to the current weather in Kathm"
+2026-05-18 16:54:29 | TTS        | synthesised          | session=c02b4546  sentence_index=0  sentence="I don't have realtime access to the current weather in Kathm"  wav_kb=193  synth_ms=4062
+2026-05-18 16:54:29 | TTS        | first_wav_enqueued   | tts_enqueue_ms=5030
+2026-05-18 16:54:29 | AUDIO_OUT  | first_audio_chunk    | session=c02b4546  ttfa_ms=5030
+2026-05-18 16:54:29 | STATE      | thinking → speaking  | session=c02b4546
+2026-05-18 16:54:29 | TTS        | synthesised          | session=c02b4546  sentence_index=1  sentence="I can suggest checking a weather website or app for the most"  wav_kb=250  synth_ms=4389
+2026-05-18 16:54:29 | TTS        | synthesised          | session=c02b4546  sentence_index=2  sentence=though.  wav_kb=56  synth_ms=625
+2026-05-18 16:54:40 | AUDIO_OUT  | playback_complete    | session=c02b4546  audio_duration_ms=10675  waited_ms=11014
+2026-05-18 16:54:40 | STATE      | speaking → listening | session=c02b4546
+2026-05-18 16:55:26 | STT        | audio_dropped_robo_idle | session=c02b4546
+2026-05-18 16:55:56 | AUDIO_IN   | client_disconnected  | session=c02b4546
+2026-05-18 16:55:56 | AUDIO_IN   | shutting_down_pipeline | session=c02b4546
+2026-05-18 16:55:56 | SESSION    | stopped              | session=c02b4546
+2026-05-18 16:55:56 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:55:56 | SESSION    | stopped              | session=c02b4546
+2026-05-18 16:55:56 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 16:55:56 | SERVER     | shutdown             | active_sessions=0
+2026-05-18 16:57:28 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 16:57:31 | WS         | audio_client_connected | session=a7de1e7c
+2026-05-18 16:57:31 | ─────────────────────────── SESSION a7de1e7c ───────────────────────────
+2026-05-18 16:57:31 | SESSION    | started              | session=a7de1e7c
+2026-05-18 16:58:02 | WS         | text_input_received  | text=Hello
+2026-05-18 16:58:02 | LLM        | turn_start           | session=a7de1e7c  query=Hello  history_turns=0
+2026-05-18 16:58:02 | STATE      | listening → thinking | session=a7de1e7c
+2026-05-18 16:58:02 | LLM        | call1_intent_classified | session=a7de1e7c  intent=general  language=en  confidence=0.8  ttft_ms=422
+2026-05-18 16:58:02 | LLM        | routed               | session=a7de1e7c  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 16:58:02 | LLM        | call2_first_token    | session=a7de1e7c  ttft_ms=891
+2026-05-18 16:58:02 | LLM        | turn_complete        | session=a7de1e7c  response_preview="Hello, how can I help you today?"
+2026-05-18 16:58:02 | TTS        | first_sentence_synthesis_start | ttfs_ms=907
+2026-05-18 16:58:07 | TTS        | synthesised          | session=a7de1e7c  sentence_index=0  sentence="Hello, how can I help you today?"  wav_kb=109  synth_ms=4264
+2026-05-18 16:58:07 | TTS        | first_wav_enqueued   | tts_enqueue_ms=5172
+2026-05-18 16:58:07 | AUDIO_OUT  | first_audio_chunk    | session=a7de1e7c  ttfa_ms=5172
+2026-05-18 16:58:07 | STATE      | thinking → speaking  | session=a7de1e7c
+2026-05-18 16:58:09 | AUDIO_OUT  | playback_complete    | session=a7de1e7c  audio_duration_ms=2325  waited_ms=2625
+2026-05-18 16:58:09 | STATE      | speaking → listening | session=a7de1e7c
+2026-05-18 17:00:23 | STT        | audio_dropped_robo_idle | session=a7de1e7c
+2026-05-18 17:00:32 | AUDIO_IN   | client_disconnected  | session=a7de1e7c
+2026-05-18 17:00:32 | AUDIO_IN   | shutting_down_pipeline | session=a7de1e7c
+2026-05-18 17:00:32 | SESSION    | stopped              | session=a7de1e7c
+2026-05-18 17:00:32 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 17:00:32 | SESSION    | stopped              | session=a7de1e7c
+2026-05-18 17:00:32 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 17:00:32 | SERVER     | shutdown             | active_sessions=0
+2026-05-18 17:02:18 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 17:02:21 | WS         | audio_client_connected | session=2b9b6c5b
+2026-05-18 17:02:21 | ─────────────────────────── SESSION 2b9b6c5b ───────────────────────────
+2026-05-18 17:02:21 | SESSION    | started              | session=2b9b6c5b
+2026-05-18 17:02:28 | WS         | text_input_received  | text=こんにちは
+2026-05-18 17:02:28 | LLM        | turn_start           | session=2b9b6c5b  query=こんにちは  history_turns=0
+2026-05-18 17:02:28 | STATE      | listening → thinking | session=2b9b6c5b
+2026-05-18 17:02:28 | LLM        | call1_intent_classified | session=2b9b6c5b  intent=general  language=ja  confidence=0.9  ttft_ms=514
+2026-05-18 17:02:28 | LLM        | routed               | session=2b9b6c5b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 17:02:29 | LLM        | call2_first_token    | session=2b9b6c5b  ttft_ms=969
+2026-05-18 17:02:29 | TTS        | first_sentence_synthesis_start | ttfs_ms=969
+2026-05-18 17:02:29 | LLM        | turn_complete        | session=2b9b6c5b  response_preview=こんにちは。今日はどうしましたか？何かお手伝いできるところはありますか？
+2026-05-18 17:02:31 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=0  sentence=こんにちは。  wav_kb=84  synth_ms=2203
+2026-05-18 17:02:31 | TTS        | first_wav_enqueued   | tts_enqueue_ms=3172
+2026-05-18 17:02:31 | AUDIO_OUT  | first_audio_chunk    | session=2b9b6c5b  ttfa_ms=3172
+2026-05-18 17:02:31 | STATE      | thinking → speaking  | session=2b9b6c5b
+2026-05-18 17:02:31 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=1  sentence=今日はどうしましたか？  wav_kb=111  synth_ms=2562
+2026-05-18 17:02:34 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=2  sentence=何かお手伝いできるところはありますか？  wav_kb=162  synth_ms=3686
+2026-05-18 17:02:43 | AUDIO_OUT  | playback_complete    | session=2b9b6c5b  audio_duration_ms=7650  waited_ms=8030
+2026-05-18 17:02:43 | STATE      | speaking → listening | session=2b9b6c5b
+2026-05-18 17:03:01 | WS         | text_input_received  | text=東京の現在の天気を調べるのを手伝ってもらえますか？
+2026-05-18 17:03:01 | LLM        | turn_start           | session=2b9b6c5b  query=東京の現在の天気を調べるのを手伝ってもらえますか？  history_turns=1
+2026-05-18 17:03:01 | STATE      | listening → thinking | session=2b9b6c5b
+2026-05-18 17:03:02 | LLM        | call1_intent_classified | session=2b9b6c5b  intent=web_search  language=ja  confidence=0.9  ttft_ms=407
+2026-05-18 17:03:04 | LLM        | routed               | session=2b9b6c5b  route_type=web_search  has_direct_response=False  has_context=True
+2026-05-18 17:03:04 | LLM        | call2_first_token    | session=2b9b6c5b  ttft_ms=2969
+2026-05-18 17:03:04 | TTS        | first_sentence_synthesis_start | ttfs_ms=3000
+2026-05-18 17:03:04 | LLM        | turn_complete        | session=2b9b6c5b  response_preview=はい、東京の現在の天気を調べてみました。現在、東京は晴れています。気温は27.6℃で、南南東の風が吹いています。蒸し暑い
+2026-05-18 17:03:07 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=1  sentence=現在、東京は晴れています。  wav_kb=133  synth_ms=2984
+2026-05-18 17:03:08 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=0  sentence=はい、東京の現在の天気を調べてみました。  wav_kb=193  synth_ms=3610
+2026-05-18 17:03:08 | TTS        | first_wav_enqueued   | tts_enqueue_ms=6610
+2026-05-18 17:03:08 | AUDIO_OUT  | first_audio_chunk    | session=2b9b6c5b  ttfa_ms=6625
+2026-05-18 17:03:08 | STATE      | thinking → speaking  | session=2b9b6c5b
+2026-05-18 17:03:10 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=2  sentence=気温は27.  wav_kb=100  synth_ms=2579
+2026-05-18 17:03:11 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=3  sentence=6℃で、南南東の風が吹いています。  wav_kb=161  synth_ms=3217
+2026-05-18 17:03:13 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=4  sentence=蒸し暑い感じがしますね。  wav_kb=119  synth_ms=2795
+2026-05-18 17:03:29 | AUDIO_OUT  | playback_complete    | session=2b9b6c5b  audio_duration_ms=15125  waited_ms=15485
+2026-05-18 17:03:29 | STATE      | speaking → listening | session=2b9b6c5b
+2026-05-18 17:04:16 | WS         | text_input_received  | text=そちらの現在の時刻は何時ですか？
+2026-05-18 17:04:16 | LLM        | turn_start           | session=2b9b6c5b  query=そちらの現在の時刻は何時ですか？  history_turns=2
+2026-05-18 17:04:16 | STATE      | listening → thinking | session=2b9b6c5b
+2026-05-18 17:04:16 | LLM        | call1_intent_classified | session=2b9b6c5b  intent=web_search  language=ja  confidence=0.9  ttft_ms=640
+2026-05-18 17:04:18 | LLM        | routed               | session=2b9b6c5b  route_type=web_search  has_direct_response=False  has_context=True
+2026-05-18 17:04:19 | LLM        | call2_first_token    | session=2b9b6c5b  ttft_ms=3078
+2026-05-18 17:04:19 | TTS        | first_sentence_synthesis_start | ttfs_ms=3171
+2026-05-18 17:04:19 | LLM        | turn_complete        | session=2b9b6c5b  response_preview=現在の時刻は、米国時間で午前５時４９分です。日本時間だと午後６時４９分になります。
+2026-05-18 17:04:23 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=1  sentence=日本時間だと午後６時４９分になります。  wav_kb=206  synth_ms=3811
+2026-05-18 17:04:23 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=0  sentence=現在の時刻は、米国時間で午前５時４９分です。  wav_kb=262  synth_ms=4359
+2026-05-18 17:04:23 | TTS        | first_wav_enqueued   | tts_enqueue_ms=7530
+2026-05-18 17:04:23 | AUDIO_OUT  | first_audio_chunk    | session=2b9b6c5b  ttfa_ms=7530
+2026-05-18 17:04:23 | STATE      | thinking → speaking  | session=2b9b6c5b
+2026-05-18 17:04:34 | AUDIO_OUT  | playback_complete    | session=2b9b6c5b  audio_duration_ms=10000  waited_ms=10358
+2026-05-18 17:04:34 | STATE      | speaking → listening | session=2b9b6c5b
+2026-05-18 17:06:02 | WS         | text_input_received  | text=短い話を聞かせてください
+2026-05-18 17:06:02 | LLM        | turn_start           | session=2b9b6c5b  query=短い話を聞かせてください  history_turns=3
+2026-05-18 17:06:02 | STATE      | listening → thinking | session=2b9b6c5b
+2026-05-18 17:06:03 | LLM        | call1_intent_classified | session=2b9b6c5b  intent=general  language=ja  confidence=0.8  ttft_ms=469
+2026-05-18 17:06:03 | LLM        | routed               | session=2b9b6c5b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 17:06:03 | LLM        | call2_first_token    | session=2b9b6c5b  ttft_ms=750
+2026-05-18 17:06:03 | TTS        | first_sentence_synthesis_start | ttfs_ms=828
+2026-05-18 17:06:04 | LLM        | turn_complete        | session=2b9b6c5b  response_preview=ある日、山の中でおじいさんが川で魚を釣っていました。すると、突然大きな魚が釣れました。おじいさんは大きな魚を釣ったことに
+2026-05-18 17:06:06 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=1  sentence=すると、突然大きな魚が釣れました。  wav_kb=175  synth_ms=2921
+2026-05-18 17:06:07 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=0  sentence=ある日、山の中でおじいさんが川で魚を釣っていました。  wav_kb=229  synth_ms=3546
+2026-05-18 17:06:07 | TTS        | first_wav_enqueued   | tts_enqueue_ms=4375
+2026-05-18 17:06:07 | AUDIO_OUT  | first_audio_chunk    | session=2b9b6c5b  ttfa_ms=4390
+2026-05-18 17:06:07 | STATE      | thinking → speaking  | session=2b9b6c5b
+2026-05-18 17:06:09 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=3  sentence=すると、魚はおじいさんに言ったのです。  wav_kb=167  synth_ms=2515
+2026-05-18 17:06:10 | WS         | text_input_received  | text=こんにちは
+2026-05-18 17:06:10 | WS         | text_input_barge_in  | session=2b9b6c5b  text=こんにちは
+2026-05-18 17:06:10 | LLM        | turn_start           | session=2b9b6c5b  query=こんにちは  history_turns=4
+2026-05-18 17:06:10 | STATE      | speaking → thinking  | session=2b9b6c5b
+2026-05-18 17:06:10 | AUDIO_OUT  | interrupt_clear      | session=2b9b6c5b
+2026-05-18 17:06:10 | STATE      | thinking → listening | session=2b9b6c5b
+2026-05-18 17:06:10 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=2  sentence=おじいさんは大きな魚を釣ったことにも驚きながら、魚を川から上げようとしました。  wav_kb=342  synth_ms=3889
+2026-05-18 17:06:10 | AUDIO_OUT  | first_audio_chunk    | session=2b9b6c5b  ttfa_ms=375
+2026-05-18 17:06:10 | STATE      | listening → speaking | session=2b9b6c5b
+2026-05-18 17:06:11 | LLM        | call1_intent_classified | session=2b9b6c5b  intent=general  language=ja  confidence=0.9  ttft_ms=438
+2026-05-18 17:06:11 | LLM        | routed               | session=2b9b6c5b  route_type=general  has_direct_response=False  has_context=False
+2026-05-18 17:06:11 | LLM        | call2_first_token    | session=2b9b6c5b  ttft_ms=780
+2026-05-18 17:06:11 | LLM        | turn_complete        | session=2b9b6c5b  response_preview=こんにちは。どうしましたか？何かお手伝いできることがありますか？
+2026-05-18 17:06:13 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=4  sentence=「おじいさん、私は魔法の魚です。  wav_kb=162  synth_ms=2780
+2026-05-18 17:06:15 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=5  sentence=你の願いを一つ聞きます」おじいさんは驚きながら、思わず言ったのです。  wav_kb=281  synth_ms=4155
+2026-05-18 17:06:18 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=7  sentence=魚はおじいさんに言ったのです。  wav_kb=140  synth_ms=3046
+2026-05-18 17:06:19 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=6  sentence=「私には何も必要ない、魚を自由にしてください」そしておじいさんは魚を川に戻しました。  wav_kb=399  synth_ms=5329
+2026-05-18 17:06:23 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=9  sentence=おじいさんはそれから幸せな毎日を送ることができました。  wav_kb=237  synth_ms=4281
+2026-05-18 17:06:24 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=8  sentence=「あなたの心は本当に美しいです、これからあなたの運は良くなります」そう言って、魚は消えてしまいました。  wav_kb=426  synth_ms=5812
+2026-05-18 17:06:24 | TTS        | first_sentence_synthesis_start | ttfs_ms=14344
+2026-05-18 17:06:27 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=0  sentence=こんにちは。  wav_kb=84  synth_ms=2109
+2026-05-18 17:06:27 | TTS        | first_wav_enqueued   | tts_enqueue_ms=16453
+2026-05-18 17:06:27 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=1  sentence=どうしましたか？  wav_kb=91  synth_ms=2390
+2026-05-18 17:06:30 | AUDIO_IN   | interrupt_received   | session=2b9b6c5b  via=text
+2026-05-18 17:06:30 | AUDIO_OUT  | interrupt_clear      | session=2b9b6c5b
+2026-05-18 17:06:30 | STATE      | speaking → listening | session=2b9b6c5b
+2026-05-18 17:06:30 | TTS        | synthesised          | session=2b9b6c5b  sentence_index=2  sentence=何かお手伝いできることがありますか？  wav_kb=157  synth_ms=3844
+2026-05-18 17:06:30 | AUDIO_OUT  | first_audio_chunk    | session=2b9b6c5b  ttfa_ms=20297
+2026-05-18 17:06:30 | STATE      | listening → speaking | session=2b9b6c5b
+2026-05-18 17:06:34 | AUDIO_OUT  | playback_complete    | session=2b9b6c5b  audio_duration_ms=3350  waited_ms=3750
+2026-05-18 17:06:34 | STATE      | speaking → listening | session=2b9b6c5b
+2026-05-18 17:07:25 | STT        | audio_dropped_robo_idle | session=2b9b6c5b
+2026-05-18 17:08:06 | AUDIO_IN   | client_disconnected  | session=2b9b6c5b
+2026-05-18 17:08:06 | AUDIO_IN   | shutting_down_pipeline | session=2b9b6c5b
+2026-05-18 17:08:06 | SESSION    | stopped              | session=2b9b6c5b
+2026-05-18 17:08:06 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 17:08:06 | SESSION    | stopped              | session=2b9b6c5b
+2026-05-18 17:08:06 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 17:08:06 | SERVER     | shutdown             | active_sessions=0

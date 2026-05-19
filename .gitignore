@@ -3,11 +3,10 @@
 
 # Logs
 logging/
-logs_permanent/
+logs_permanent
 
 # Python virtual environment
 venv/
-.kiro/
 # Python cache
 __pycache__/
 *.py[cod]
@@ -47,14 +46,19 @@ __pycache__/
 *.pyc
 
 # PyInstaller
+installer
 build/
+builder.log
 dist/
 *.spec.bak
 
 models/
+<<<<<<< HEAD
 
 # Build logs
 
 
 # Windows redistributable installer
 installer/vc_redist.x64.exe
+=======
+>>>>>>> dev

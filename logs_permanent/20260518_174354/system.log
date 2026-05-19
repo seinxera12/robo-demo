@@ -1,0 +1,16 @@
+2026-05-18 17:37:32 | SERVER     | ready                | port=8000  stt_model=whisper-large-v3-turbo  llm_model=llama-3.3-70b-versatile
+2026-05-18 17:37:32 | WS         | audio_client_connected | session=70d86128
+2026-05-18 17:37:32 | ─────────────────────────── SESSION 70d86128 ───────────────────────────
+2026-05-18 17:37:32 | SESSION    | started              | session=70d86128
+2026-05-18 17:37:55 | STT        | audio_dropped_robo_idle | session=70d86128
+2026-05-18 17:38:56 | STT        | audio_dropped_robo_idle | session=70d86128
+2026-05-18 17:40:09 | STT        | audio_dropped_robo_idle | session=70d86128
+2026-05-18 17:41:41 | STT        | audio_dropped_robo_idle | session=70d86128
+2026-05-18 17:42:48 | STT        | audio_dropped_robo_idle | session=70d86128
+2026-05-18 17:43:48 | AUDIO_IN   | client_disconnected  | session=70d86128
+2026-05-18 17:43:48 | AUDIO_IN   | shutting_down_pipeline | session=70d86128
+2026-05-18 17:43:48 | SESSION    | stopped              | session=70d86128
+2026-05-18 17:43:48 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 17:43:48 | SESSION    | stopped              | session=70d86128
+2026-05-18 17:43:48 | ────────────────────────────────────────────────────────────────────────
+2026-05-18 17:43:48 | SERVER     | shutdown             | active_sessions=0
