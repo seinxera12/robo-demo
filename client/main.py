@@ -92,11 +92,17 @@ async def main() -> None:
             vad.set_speaking(False)   # explicit re-arm (idempotent)
         logger.debug("Status update: %s", state)
 
+    def _on_robo_state(active: bool) -> None:
+        """Arm or disarm VAD barge-in when the tap-to-speak button is toggled."""
+        vad.set_barge_in_enabled(active)
+        logger.debug("Robo active: %s — barge-in %s", active, "armed" if active else "disarmed")
+
     ws_client = WSClient(
         server_url=server_url,
         on_audio=_on_audio,
         on_status=_on_status,
         on_interrupt=audio_playback.interrupt,
+        on_robo_state=_on_robo_state,
     )
 
     # SileroVAD — voice activity detection; callbacks wired below

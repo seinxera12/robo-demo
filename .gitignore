@@ -3,6 +3,7 @@
 
 # Logs
 logging/
+logs/
 logs_permanent
 logs/
 
