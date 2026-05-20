@@ -231,4 +231,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # REQUIRED for PyInstaller --onedir on Windows.
+    # Must be called before any other code when the module is the entry point.
+    # Without this, frozen exes that use multiprocessing (torch, kokoro) will
+    # spawn infinite child processes instead of worker processes.
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()

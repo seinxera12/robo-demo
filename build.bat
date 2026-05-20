@@ -26,7 +26,7 @@ if not errorlevel 1 (
 )
 
 echo [3/4] Building...
-pyinstaller DemoVoiceAssistant.spec --clean --noconfirm --log-level DEBUG > builder.log 2>&1
+pyinstaller DemoVoiceAssistant.spec --clean --noconfirm --log-level WARN > builder.log 2>&1
 
 if errorlevel 1 (
     echo.

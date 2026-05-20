@@ -45,8 +45,12 @@ espeakng_datas      = guarded_collect('espeakng_loader')
 # misaki G2P data files (language dictionaries, etc.)
 misaki_datas        = guarded_collect('misaki')
 
-# kokoro package data (voice configs, etc.)
-kokoro_datas        = guarded_collect('kokoro')
+# kokoro is pure-Python — collect_data_files returns 0 items (no data files).
+# Use collect_all() instead so submodules are added as hidden imports and
+# collected as .py source files on disk (required for dynamic KPipeline init).
+kokoro_source   = collect_all('kokoro')
+kokoro_datas    = kokoro_source[0]   # empty list — that's fine
+kokoro_hiddens  = kokoro_source[2]   # 7 submodules: pipeline, model, istftnet, etc.
 
 # pyopenjtalk ships htsvoice/ data for Japanese TTS
 pyopenjtalk_datas   = guarded_collect('pyopenjtalk')
@@ -109,17 +113,22 @@ all_datas = (
 # torch CPU ships torch_cpu.dll and other native libs
 torch_binaries   = guarded_collect('torch',   collector=collect_dynamic_libs)
 
-# fugashi ships libmecab DLL inside fugashi.libs/
-fugashi_binaries = guarded_collect('fugashi', collector=collect_dynamic_libs)
+# fugashi's libmecab DLL is found automatically by PyInstaller's own binary
+# dependency walker (via fugashi.libs/). collect_dynamic_libs returns 0 items
+# but the DLL lands in dist correctly. Skip the guarded_collect to avoid the
+# spurious [WARNING] noise in the build log.
+fugashi_binaries = []
 
-all_binaries = torch_binaries + fugashi_binaries + server_binaries
+all_binaries = torch_binaries + server_binaries
+# Note: fugashi_binaries intentionally empty — DLLs found by PyInstaller's
+# binary walker. server_binaries from collect_all('server') is always [].
 
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 # Modules PyInstaller misses because they are imported dynamically
 # (via importlib, inside try/except, or inside conditional branches).
 
-hidden_imports = server_hiddens + [
+hidden_imports = server_hiddens + kokoro_hiddens + [
     # ── uvicorn internals ──────────────────────────────────────────────────
     'uvicorn.logging',
     'uvicorn.loops',
@@ -163,12 +172,20 @@ hidden_imports = server_hiddens + [
     'websockets.legacy.client',
 
     # ── torch ──────────────────────────────────────────────────────────────
+    # All submodules that _run_server() pre-imports to prevent the circular
+    # import that causes "partially initialized module 'torch' has no attribute
+    # 'version'" at kokoro's first torch.load() call.
     'torch',
-    'torch.jit',          
-    'torch.nn',                # ← add
-    'torch.nn.functional',     # ← add
-    'torch.nn.modules',        # ← add
-    'torch.nn.modules.rnn',    # ← add (kokoro uses RNN layers)
+    'torch.version',        # the submodule (torch/version.py), not the string
+    'torch.jit',
+    'torch.nn',
+    'torch.nn.functional',
+    'torch.nn.modules',
+    'torch.nn.modules.rnn',    # kokoro uses RNN layers
+    'torch._C',                # C extension — root of the circular import
+    'torch.storage',           # required by torch.load()
+    'torch.serialization',     # required by torch.load()
+    'torch.cuda',              # accessed by torch.version internals on CPU builds
 
     # ── Audio I/O ──────────────────────────────────────────────────────────
     'sounddevice',
