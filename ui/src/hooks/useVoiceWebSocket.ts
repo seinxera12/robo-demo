@@ -22,6 +22,10 @@ interface UseVoiceWebSocketReturn {
   messages: Message[];
   currentAssistantText: string;
   sessionId: string | null;
+  /** True only while the LLM is actively generating (thinking state).
+   *  False as soon as the full response text arrives, even if TTS is still playing.
+   *  Use this — not pipelineState — to decide whether to lock inputs. */
+  isLlmGenerating: boolean;
   sendTextInput: (text: string) => void;
   setRoboActive: (active: boolean) => void;
 }
@@ -95,6 +99,10 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentAssistantText, setCurrentAssistantText] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  // True only while the LLM is generating (server state = 'thinking').
+  // Set to false as soon as llm_text_chunk arrives — inputs unlock at that point
+  // regardless of TTS synthesis / playback state.
+  const [isLlmGenerating, setIsLlmGenerating] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -264,14 +272,15 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
         }
 
         case 'llm_text_chunk': {
-          // Full response text arrives as a single chunk.
-          // Render it word-by-word with a calculated delay.
-          // Keep pipelineState as 'speaking' for the entire render duration
-          // so inputs remain locked until the last word is shown.
+          // Full response text arrives as a single chunk — LLM generation is done.
+          // Unlock inputs immediately so the user can interrupt TTS playback.
+          setIsLlmGenerating(false);
+
           const responseText = (data.text as string).trim();
           if (!responseText) break;
 
-          // Ensure inputs are locked while rendering.
+          // Ensure the status indicator shows 'speaking' while TTS plays,
+          // but do NOT lock inputs (isLlmGenerating is already false).
           setPipelineState('speaking');
 
           startSimRender(responseText, () => {
@@ -299,12 +308,33 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
         case 'status': {
           const state = data.state as string;
           if (state === 'listening' || state === 'thinking' || state === 'speaking') {
+            // Track LLM generation state: lock on 'thinking', unlock on anything else.
+            // (llm_text_chunk also unlocks — this handles the case where 'listening'
+            // arrives before llm_text_chunk, e.g. after an interrupt.)
+            if (state === 'thinking') {
+              setIsLlmGenerating(true);
+            } else {
+              setIsLlmGenerating(false);
+            }
+
             if (isSimRenderingRef.current) {
-              // A simulated render is in progress — defer the state update
-              // until the render completes so inputs stay locked.
-              pendingPipelineStateRef.current = state as 'listening' | 'thinking' | 'speaking';
               if (state === 'listening') {
-                // Don't flush/commit yet — the render onComplete handler will do it.
+                // Server transitioned to listening while we were rendering —
+                // this means an interrupt happened.  Flush the render immediately,
+                // commit whatever text was shown, and apply the state now.
+                cancelSimRender();
+                pendingPipelineStateRef.current = null;
+                const interruptedText = currentAssistantTextRef.current;
+                if (interruptedText) {
+                  const id = crypto.randomUUID();
+                  setMessages((prev) => [...prev, { id, role: 'assistant', text: interruptedText }]);
+                  setCurrentAssistantText('');
+                }
+                setPipelineState('listening');
+              } else {
+                // A simulated render is in progress — defer non-interrupt state updates
+                // until the render completes so the status indicator stays in sync.
+                pendingPipelineStateRef.current = state as 'listening' | 'thinking' | 'speaking';
               }
             } else {
               setPipelineState(state);
@@ -332,6 +362,7 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
       if (!isMountedRef.current) return;
       setPipelineState('disconnected');
       setRoboActiveState(false);
+      setIsLlmGenerating(false);
       optionsRef.current?.onWsClose?.();
       wsRef.current = null;
       reconnectTimerRef.current = setTimeout(() => {
@@ -367,6 +398,7 @@ export function useVoiceWebSocket(options?: UseVoiceWebSocketOptions): UseVoiceW
     messages,
     currentAssistantText,
     sessionId,
+    isLlmGenerating,
     sendTextInput,
     setRoboActive,
   };

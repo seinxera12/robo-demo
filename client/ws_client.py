@@ -43,11 +43,13 @@ class WSClient:
         on_audio: Callable[[bytes], None],
         on_status: Callable[[str], None],
         on_interrupt: Callable[[], None] | None = None,
+        on_robo_state: Callable[[bool], None] | None = None,
     ) -> None:
         self._server_url = server_url
         self._on_audio = on_audio
         self._on_status = on_status
         self._on_interrupt = on_interrupt
+        self._on_robo_state = on_robo_state
         self._ws = None  # active websockets connection
         self._running: bool = True  # set to False to stop the run() loop
         self._last_state: str = ""  # track previous state to detect speaking→listening
@@ -187,6 +189,14 @@ class WSClient:
                     self._on_interrupt()
             self._last_state = state
             self._on_status(state)
+        elif msg_type == "robo_activated":
+            logger.debug("WSClient received robo_activated")
+            if self._on_robo_state is not None:
+                self._on_robo_state(True)
+        elif msg_type == "robo_deactivated":
+            logger.debug("WSClient received robo_deactivated")
+            if self._on_robo_state is not None:
+                self._on_robo_state(False)
         else:
             # Log other message types at debug level; they are not consumed here
             logger.debug("WSClient received JSON message type=%s", msg_type)

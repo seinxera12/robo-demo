@@ -259,6 +259,16 @@ class VoicePipeline:
         self._state.robo_active = active
         pipeline_event("ROBO", "activated" if active else "deactivated",
                        session=self._state.session_id[:8])
+        # Notify the AudioClient so it can arm/disarm VAD barge-in detection.
+        msg = json.dumps({"type": "robo_activated" if active else "robo_deactivated"})
+        asyncio.ensure_future(self._send_to_audio_client(msg))
+
+    async def _send_to_audio_client(self, text: str) -> None:
+        """Send a JSON text message to the AudioClient WebSocket (best-effort)."""
+        try:
+            await self._audio_ws.send_text(text)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Helpers
@@ -297,6 +307,11 @@ class VoicePipeline:
             pipeline_event("ROBO", "auto_deactivated_after_turn",
                            session=self._state.session_id[:8])
             await self._broadcast({"type": "robo_deactivated"})
+            # Also notify the AudioClient so it can disarm VAD barge-in detection.
+            try:
+                await self._audio_ws.send_text(json.dumps({"type": "robo_deactivated"}))
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Worker 1: audio_input_worker
@@ -335,8 +350,14 @@ class VoicePipeline:
                             continue
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         pass
-                    # New PCM16 frame while pipeline is generating — trigger barge-in
-                    if self._state.state in ("thinking", "speaking"):
+                    # New PCM16 frame while pipeline is generating — trigger barge-in only
+                    # when the user has explicitly activated voice input via the tap-to-speak
+                    # button (robo_active=True) AND no interrupt is already in progress.
+                    # The second guard prevents re-triggering during the cleanup window
+                    # between request_interrupt() and begin_turn().
+                    if (self._state.state in ("thinking", "speaking")
+                            and self._state.robo_active
+                            and not self._ic.cancelled.is_set()):
                         self._ic.request_interrupt(source="new_audio_frame")
                         self._state.interrupt = True
                     await self._state.audio_queue.put(raw_bytes)
@@ -349,6 +370,10 @@ class VoicePipeline:
                                            session=sid, via="text")
                             self._ic.request_interrupt(source="explicit_message")
                             self._state.interrupt = True
+                            # Do NOT deactivate robo_active here — the user's speech
+                            # after the barge-in is still being accumulated by the VAD
+                            # and will arrive shortly.  robo_active is deactivated by
+                            # _stt_worker after transcription completes.
                     except json.JSONDecodeError as exc:
                         pipeline_warn("AUDIO_IN", "bad_json", session=sid, error=str(exc))
 
@@ -423,6 +448,20 @@ class VoicePipeline:
                                lang=self._state.detected_language)
 
                 await self._state.transcript_queue.put(result)
+
+                # Deactivate robo_active immediately after the audio is captured and
+                # forwarded.  This prevents the mic from accepting further voice input
+                # while the LLM is generating — the user must press the button again
+                # for the next voice turn.  Without this, any trailing audio or ambient
+                # sound during "thinking" state would trigger a spurious barge-in.
+                if self._state.robo_active:
+                    self._state.robo_active = False
+                    pipeline_event("ROBO", "auto_deactivated_after_stt",
+                                   session=sid)
+                    await self._broadcast({"type": "robo_deactivated"})
+                    await self._send_to_audio_client(
+                        json.dumps({"type": "robo_deactivated"})
+                    )
 
         except asyncio.CancelledError:
             raise
@@ -570,10 +609,11 @@ class VoicePipeline:
                             async for token in self._llm.stream(
                                 messages, max_tokens=200, temperature=0.65
                             ):
-                                if self._ic.cancelled.is_set():
-                                    pipeline_event("LLM", "stream_interrupted",
-                                                   session=sid, tokens_so_far=token_count)
-                                    break
+                                # Do NOT check cancelled here — the LLM stream must run to
+                                # completion even during a barge-in.  The _tts_worker detects
+                                # cancelled.is_set() and calls _drain_token_queue() to consume
+                                # and discard any tokens produced after the interrupt.  The
+                                # post-stream check below handles history/broadcast skipping.
 
                                 if not first_token_logged:
                                     ttft_ms = int(
@@ -713,8 +753,11 @@ class VoicePipeline:
                 pipeline_error("TTS", "synthesis_task_error", session=sid, error=str(exc))
                 return
             # Discard if a new turn has started (interrupt was processed) or
-            # the interrupt flag is still set.
-            if task_turn_id != self._current_turn_id or self._state.interrupt:
+            # the interrupt flag is still set, or the IC cancellation token is
+            # still set (catches the window between interrupt and begin_turn()).
+            if (task_turn_id != self._current_turn_id
+                    or self._state.interrupt
+                    or self._ic.cancelled.is_set()):
                 pipeline_event("TTS", "stale_synthesis_discarded", session=sid,
                                task_turn_id=task_turn_id,
                                current_turn_id=self._current_turn_id)
@@ -948,6 +991,9 @@ class VoicePipeline:
                     self._state.interrupt = False
 
                     await self._set_state("listening")
+                    # Clear the IC CancellationToken so _llm_worker can process
+                    # the next transcript without timing out on wait_cleared().
+                    self._ic.begin_turn()
                     continue
 
                 try:

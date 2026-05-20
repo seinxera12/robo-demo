@@ -21,7 +21,12 @@ logger = logging.getLogger(__name__)
 SAMPLE_RATE = 16_000          # Hz
 FRAME_SAMPLES = 512           # 32ms at 16 kHz
 FRAME_MS = 32                 # milliseconds per frame
-SPEECH_THRESHOLD = 0.5        # probability threshold for speech detection
+SPEECH_THRESHOLD = 0.3        # probability threshold for speech detection.
+                              # Silero VAD scores Japanese and other non-English
+                              # languages lower than English — 0.3 is the
+                              # recommended multilingual threshold per the Silero
+                              # VAD paper.  0.5 causes Japanese frames to be
+                              # silently dropped, leaving the button stuck open.
 
 # Barge-in protection: minimum seconds after set_speaking(True) before a
 # barge-in can fire.  Prevents the TTS speaker output from feeding back into
@@ -62,6 +67,7 @@ class SileroVAD:
         self._speech_buffer: bytes = b""         # accumulated PCM16 during speech
         self._silence_frames: int = 0            # consecutive silent frame count
         self._client_speaking: bool = False      # AudioClient TTS playback state
+        self._barge_in_enabled: bool = False     # True only when robo_active (button pressed)
 
         # Barge-in timing guards
         self._speaking_started_at: float = 0.0  # monotonic time when set_speaking(True) was called
@@ -89,6 +95,12 @@ class SileroVAD:
             # --- Speech detected ---
             if self._client_speaking:
                 # Barge-in: user started speaking while TTS is playing.
+                # Only fire if barge-in is enabled (robo_active / button was pressed).
+                # Without this gate, ambient mic audio during TTS playback would send
+                # a spurious interrupt even though the user never pressed the button.
+                if not self._barge_in_enabled:
+                    logger.debug("Barge-in suppressed (barge_in_enabled=False)")
+                    return
                 # Guard 1 — cooldown: ignore frames in the first _BARGE_IN_COOLDOWN_S
                 # after playback started (speaker bleed / echo protection).
                 # Guard 2 — debounce: ignore if we already fired a barge-in recently.
@@ -105,6 +117,12 @@ class SileroVAD:
                 logger.debug("Barge-in detected (prob=%.3f)", speech_prob)
                 self._last_barge_in_at = now
                 self._on_barge_in()
+                # Clear _client_speaking immediately so that frames arriving
+                # before the server responds with "listening" are accumulated
+                # as normal speech rather than being dropped by the barge-in
+                # branch.  The server will also call set_speaking(False) when
+                # it transitions to "listening", which is idempotent here.
+                self._client_speaking = False
                 # Reset VAD state so we start fresh after the interrupt
                 self._reset_state()
                 return
@@ -146,6 +164,18 @@ class SileroVAD:
         if is_speaking:
             self._speaking_started_at = time.monotonic()
         logger.debug("VAD client_speaking set to %s", is_speaking)
+
+    def set_barge_in_enabled(self, enabled: bool) -> None:
+        """Arm or disarm barge-in detection.
+
+        Must be True (robo_active / button pressed) for barge-in to fire.
+        Disarmed automatically when the server sends robo_deactivated.
+
+        Args:
+            enabled: True to allow barge-in; False to suppress it.
+        """
+        self._barge_in_enabled = enabled
+        logger.debug("VAD barge_in_enabled set to %s", enabled)
 
     # ------------------------------------------------------------------
     # Internal helpers
