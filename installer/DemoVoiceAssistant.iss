@@ -11,10 +11,11 @@
 ; Output: installer\output\DemoVoiceAssistantSetup.exe
 
 #define MyAppName      "Demo Voice Assistant"
-#define MyAppVersion   "1.0.0"
-#define MyAppPublisher "Your Company Name"
+#define MyAppPublisher "Demo"
 #define MyAppExeName   "DemoVoiceAssistant.exe"
 #define MyAppDir       "..\dist\DemoVoiceAssistant"
+#define MyAppVersion   GetFileVersion(MyAppDir + "\" + MyAppExeName)
+#define MyAppURL       "https://github.com/seinxera12/robo-demo"
 
 [Setup]
 ; IMPORTANT: This GUID identifies your app in the Windows registry.
@@ -24,14 +25,14 @@ AppId={{B7E4A2F1-3C8D-4E9B-A051-F62D8C3E7A90}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-AppPublisherURL=https://yourcompany.com
-AppSupportURL=https://yourcompany.com/support
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}/issues
+AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 OutputDir=output
-OutputBaseFilename=DemoVoiceAssistantSetup
-; Uncomment once assets\icon.ico exists:
-; SetupIconFile=..\assets\icon.ico
+OutputBaseFilename=DemoVoiceAssistantSetup-v{#MyAppVersion}
+SetupIconFile=..\assets\icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
