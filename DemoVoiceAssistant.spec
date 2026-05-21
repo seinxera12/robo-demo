@@ -46,6 +46,9 @@ espeakng_datas      = guarded_collect('espeakng_loader')
 # misaki G2P data files (language dictionaries, etc.)
 misaki_datas        = guarded_collect('misaki')
 
+# language_tags ships JSON data files required by misaki G2P
+language_tags_datas = guarded_collect('language_tags')
+
 # ── Package metadata ──────────────────────────────────────────────────────────
 # Collect .dist-info metadata for ALL installed packages.
 # Prevents pkg_resources.require() from failing on any dependency check
@@ -91,6 +94,18 @@ unidic_datas        = guarded_collect('unidic_lite')
 # If printed path is NOT inside your venv's site-packages, replace with:
 #   spacy_model_datas = [('C:/full/path/to/en_core_web_sm', 'en_core_web_sm')]
 spacy_model_datas   = guarded_collect('en_core_web_sm')
+spacy_datas = guarded_collect('spacy')
+
+# curated_transformers needs .py files on disk for TorchScript source access
+curated_transformers_source = collect_all('curated_transformers')
+curated_transformers_datas    = curated_transformers_source[0]
+curated_transformers_binaries = curated_transformers_source[1]
+curated_transformers_hiddens  = curated_transformers_source[2]
+
+spacy_curated_source = collect_all('spacy_curated_transformers')
+spacy_curated_datas    = spacy_curated_source[0]
+spacy_curated_binaries = spacy_curated_source[1]
+spacy_curated_hiddens  = spacy_curated_source[2]
 
 # groq SDK may include JSON schema files
 groq_datas          = guarded_collect('groq')
@@ -110,6 +125,8 @@ config_datas = [
     ('server/prompts',         'server/prompts'),
 ]
 
+
+
 # Force server package to land as real .py files on disk (not buried in PYZ).
 # Required because uvicorn needs to import 'server.main' by string at runtime,
 # and string-based importlib lookups cannot reach inside the PYZ archive.
@@ -123,10 +140,14 @@ all_datas = (
     + soundfile_datas
     + espeakng_datas
     + misaki_datas
+    + language_tags_datas
     + kokoro_datas
     + pyopenjtalk_datas
     + unidic_datas
     + spacy_model_datas
+    + curated_transformers_datas    # ← add
+    + spacy_curated_datas
+    + spacy_datas
     + groq_datas
     + certifi_datas
     + ui_datas
@@ -152,13 +173,13 @@ fugashi_binaries = []
 # Note: fugashi_binaries intentionally empty — DLLs found by PyInstaller's
 # binary walker. server_binaries from collect_all('server') is always [].
 
-all_binaries = torch_binaries + server_binaries + transformers_binaries
+all_binaries = torch_binaries + server_binaries + transformers_binaries  + curated_transformers_binaries + spacy_curated_binaries
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 # Modules PyInstaller misses because they are imported dynamically
 # (via importlib, inside try/except, or inside conditional branches).
 
-hidden_imports = server_hiddens + kokoro_hiddens + transformers_hiddens + [
+hidden_imports = server_hiddens + kokoro_hiddens + transformers_hiddens + curated_transformers_hiddens + spacy_curated_hiddens + [
     'pkg_resources',
     'setuptools',
 
@@ -243,9 +264,23 @@ hidden_imports = server_hiddens + kokoro_hiddens + transformers_hiddens + [
     'mojimoji',
     'num2words',
 
-    # ── spaCy (misaki English G2P dependency) ──────────────────────────────
+   # ── spaCy (misaki English G2P dependency) ──────────────────────────────
     'spacy',
     'en_core_web_sm',
+    'spacy_curated_transformers',
+    'spacy_transformers',
+    'spacy.lang.en',
+    'spacy.lang.en.stop_words',
+    'spacy.lang.en.syntax_iterators',
+    'spacy.lang.en.punctuation',
+    'spacy.lang.en.tag_map',
+    'spacy.lang.en.morph_rules',
+    'spacy.pipeline.tok2vec',
+    'spacy.pipeline.tagger',
+    'spacy.pipeline.dep_parser',
+    'spacy.pipeline.senter',
+    'spacy.pipeline.ner',
+    'spacy.pipeline.trainable_pipe',
 
     # ── Google Gemini ──────────────────────────────────────────────────────
     'google.generativeai',
