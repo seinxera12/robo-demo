@@ -242,7 +242,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server shutting down — cancelling %d active pipeline(s).", len(active_pipelines))
     pipeline_event("SERVER", "shutdown", active_sessions=len(active_pipelines))
     for pipeline in list(active_pipelines.values()):
-        pipeline.stop()
+        await pipeline.stop()
     active_pipelines.clear()
 
 
@@ -325,7 +325,7 @@ async def ws_audio_client(websocket: WebSocket):
             exc_info=True,
         )
     finally:
-        pipeline.stop()
+        await pipeline.stop()
         active_pipelines.pop(session_id, None)
         logger.info("AudioClient session cleaned up — session_id=%s", session_id)
 

@@ -19,8 +19,8 @@
 
 import os
 import certifi
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_all
-
+from importlib.metadata import packages_distributions
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_all, copy_metadata
 block_cipher = None
 
 # ── Helper: warn on empty collections ────────────────────────────────────────
@@ -29,6 +29,7 @@ def guarded_collect(name, collector=collect_data_files):
     if not result:
         print(f"[WARNING] No files collected for: {name} — check the package is installed in your venv")
     return result
+
 
 
 # ── Data files ────────────────────────────────────────────────────────────────
@@ -44,6 +45,32 @@ espeakng_datas      = guarded_collect('espeakng_loader')
 
 # misaki G2P data files (language dictionaries, etc.)
 misaki_datas        = guarded_collect('misaki')
+
+# ── Package metadata ──────────────────────────────────────────────────────────
+# Collect .dist-info metadata for ALL installed packages.
+# Prevents pkg_resources.require() from failing on any dependency check
+# inside transformers, torch, or any other package that validates its deps
+# at import time.
+
+def safe_copy_metadata(pkg):
+    try:
+        return copy_metadata(pkg)
+    except Exception:
+        return []
+
+metadata_datas = []
+seen = set()
+for import_name, dist_names in packages_distributions().items():
+    for dist_name in dist_names:
+        if dist_name not in seen:
+            seen.add(dist_name)
+            metadata_datas += safe_copy_metadata(dist_name)
+
+# transformers does runtime submodule discovery via pkgutil/importlib.resources
+# It MUST land as real .py files on disk, not buried in PYZ
+transformers_datas    = []  # tokenizer configs etc.
+transformers_binaries = []
+transformers_hiddens  = []
 
 # kokoro is pure-Python — collect_data_files returns 0 items (no data files).
 # Use collect_all() instead so submodules are added as hidden imports and
@@ -104,7 +131,9 @@ all_datas = (
     + certifi_datas
     + ui_datas
     + config_datas
+    + transformers_datas
     + server_datas
+    + metadata_datas
 )
 
 
@@ -119,16 +148,20 @@ torch_binaries   = guarded_collect('torch',   collector=collect_dynamic_libs)
 # spurious [WARNING] noise in the build log.
 fugashi_binaries = []
 
-all_binaries = torch_binaries + server_binaries
+
 # Note: fugashi_binaries intentionally empty — DLLs found by PyInstaller's
 # binary walker. server_binaries from collect_all('server') is always [].
 
+all_binaries = torch_binaries + server_binaries + transformers_binaries
 
 # ── Hidden imports ────────────────────────────────────────────────────────────
 # Modules PyInstaller misses because they are imported dynamically
 # (via importlib, inside try/except, or inside conditional branches).
 
-hidden_imports = server_hiddens + kokoro_hiddens + [
+hidden_imports = server_hiddens + kokoro_hiddens + transformers_hiddens + [
+    'pkg_resources',
+    'setuptools',
+
     # ── uvicorn internals ──────────────────────────────────────────────────
     'uvicorn.logging',
     'uvicorn.loops',
@@ -250,7 +283,7 @@ a = Analysis(
     hooksconfig={},
     # rthook_paths.py runs before any app code — inserts _MEIPASS into sys.path
     # so pkg_resources and string-based importlib lookups find bundled packages
-    runtime_hooks=['hooks/rthook_paths.py',],
+    runtime_hooks=['hooks/rthook_paths.py','hooks/rthook_transformers.py'],
     excludes=[
         'matplotlib',
         'numpy.distutils',
@@ -265,12 +298,16 @@ a = Analysis(
         'PIL.ImageQt',
         'cv2',
         'sklearn',
-        'scipy',
         'pandas',
         'tkinter.test',
         'torchaudio',
         'torio',
         'torchvision',
+        'transformers.cli.serving',  # ← add
+        'transformers.trainer',
+        'transformers.training_args',
+        'transformers.pipelines',
+        'transformers.models.auto',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

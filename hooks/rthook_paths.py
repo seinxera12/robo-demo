@@ -35,3 +35,93 @@ if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
             return ''
 
     _inspect.getsource = _frozen_safe_getsource
+
+    # ── pkgutil.iter_modules patch ────────────────────────────────────────
+    # transformers/kokoro use pkgutil.iter_modules() to dynamically discover
+    # submodules at runtime (e.g. transformers.models.__init__ iterates all
+    # model subdirs). In a frozen build, PyInstaller puts .pyc files inside
+    # the PYZ archive — they don't exist on disk — so iter_modules() finds
+    # an empty or broken path and crashes with [WinError 3].
+    #
+    # Fix: wrap iter_modules so that when a path points inside _MEIPASS,
+    # we also yield modules found in the PYZ via sys.modules / pkgutil's
+    # own importer, falling back gracefully on any filesystem error.
+    import pkgutil as _pkgutil
+    import importlib as _importlib
+
+    _original_iter_modules = _pkgutil.iter_modules
+
+    def _frozen_safe_iter_modules(path=None, prefix=''):
+        try:
+            yield from _original_iter_modules(path, prefix)
+        except (OSError, FileNotFoundError):
+            # Path doesn't exist on disk (module is in PYZ).
+            # Fall back to inspecting sys.modules for already-imported
+            # submodules, so dynamic __init__ loops don't crash.
+            if path is not None:
+                for p in path:
+                    p_str = str(p)
+                    if meipass in p_str:
+                        # Derive package name from path relative to _MEIPASS
+                        rel = os.path.relpath(p_str, meipass).replace(os.sep, '.')
+                        for mod_name, mod in list(sys.modules.items()):
+                            if mod_name.startswith(rel + '.'):
+                                tail = mod_name[len(rel) + 1:]
+                                if '.' not in tail:  # direct children only
+                                    yield _pkgutil.ModuleInfo(
+                                        None, prefix + tail, False
+                                    )
+
+    _pkgutil.iter_modules = _frozen_safe_iter_modules
+
+    # ── importlib.resources patch ─────────────────────────────────────────
+    # Some transformers internals use importlib.resources.files() to locate
+    # package data. In frozen builds this can also fail with path errors.
+    try:
+        import importlib.resources as _ilr
+        _original_files = _ilr.files
+
+        def _frozen_safe_files(package):
+            try:
+                return _original_files(package)
+            except (TypeError, FileNotFoundError, NotADirectoryError):
+                # Return a Path into _MEIPASS as best-effort fallback
+                from pathlib import Path
+                if isinstance(package, str):
+                    pkg_path = Path(meipass) / package.replace('.', os.sep)
+                    if pkg_path.exists():
+                        return pkg_path
+                raise
+
+        _ilr.files = _frozen_safe_files
+    except Exception:
+        pass  # importlib.resources unavailable — skip
+
+
+    # ── pkg_resources.require patch ───────────────────────────────────────
+    # Must be here in rthook_paths (not rthook_transformers) because this
+    # runs first. transformers.dependency_versions_check fires at import
+    # time before rthook_transformers executes.
+    try:
+        import pkg_resources as _pkg_resources
+
+        _orig_require = _pkg_resources.require
+        def _frozen_safe_require(requirements, _orig=_orig_require):
+            try:
+                return _orig(requirements)
+            except Exception:
+                return []
+        _pkg_resources.require = _frozen_safe_require
+
+        if hasattr(_pkg_resources, 'working_set'):
+            _orig_ws = _pkg_resources.working_set.require
+            def _frozen_safe_ws_require(requirements, *args,
+                                        _orig=_orig_ws, **kwargs):
+                try:
+                    return _orig(requirements, *args, **kwargs)
+                except Exception:
+                    return []
+            _pkg_resources.working_set.require = _frozen_safe_ws_require
+
+    except ImportError:
+        pass
