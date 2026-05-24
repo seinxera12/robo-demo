@@ -34,12 +34,38 @@ from client.ws_client import WSClient
 
 
 def _configure_logging(log_level: str) -> None:
-    """Configure root logger from the LOG_LEVEL environment variable."""
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
-    logging.basicConfig(
-        level=numeric_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    from server.config import LOG_DIR
+    import os
+    from logging.handlers import RotatingFileHandler
+
+    level = getattr(logging, log_level.upper(), logging.INFO)
+    
+    # File handler — writes to same log dir as server
+    log_path = os.path.join(LOG_DIR, "audio_client.log")
+    fh = RotatingFileHandler(
+        log_path,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
     )
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s | %(name)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    ))
+
+    # Console handler
+    ch = logging.StreamHandler()
+    ch.setLevel(level)
+    ch.setFormatter(logging.Formatter(
+        "%(asctime)s | %(name)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    ))
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(fh)
+    root.addHandler(ch)
 
 
 async def main() -> None:

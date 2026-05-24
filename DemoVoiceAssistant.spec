@@ -335,8 +335,6 @@ a = Analysis(
         'sklearn',
         'pandas',
         'tkinter.test',
-        'torchaudio',
-        'torio',
         'torchvision',
         'transformers.cli.serving',  # ← add
         'transformers.trainer',
