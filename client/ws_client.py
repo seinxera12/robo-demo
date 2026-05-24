@@ -20,8 +20,8 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-# Reconnect backoff delays in seconds (3 attempts max)
-_BACKOFF_DELAYS = [1, 2, 4]
+# Reconnect backoff delays in seconds (10 attempts max)
+_BACKOFF_DELAYS = [1, 2, 4, 8, 10, 10, 10, 10, 10, 10]
 
 
 class WSClient:
