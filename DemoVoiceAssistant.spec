@@ -125,6 +125,11 @@ config_datas = [
     ('server/prompts',         'server/prompts'),
 ]
 
+# Local VAD model
+models_datas = [
+    ('models/silero_vad.jit', 'models'),
+]
+
 
 
 # Force server package to land as real .py files on disk (not buried in PYZ).
@@ -152,6 +157,7 @@ all_datas = (
     + certifi_datas
     + ui_datas
     + config_datas
+    + models_datas
     + transformers_datas
     + server_datas
     + metadata_datas

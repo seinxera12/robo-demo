@@ -182,18 +182,16 @@ class SileroVAD:
     # ------------------------------------------------------------------
 
     def _load_model(self) -> object | None:
-        """Load the Silero VAD model via torch.hub."""
+        """Load the Silero VAD model from local bundled file."""
         try:
             import torch  # noqa: F401 — checked at runtime
+            import os
+            from server.config import MODELS_DIR
 
-            model, _ = torch.hub.load(
-                repo_or_dir="snakers4/silero-vad",
-                model="silero_vad",
-                force_reload=False,
-                onnx=False,
-            )
+            model_path = os.path.join(MODELS_DIR, "silero_vad.jit")
+            model = torch.jit.load(model_path)
             model.eval()
-            logger.info("Silero VAD model loaded successfully.")
+            logger.info("Silero VAD model loaded successfully from local bundle.")
             return model
         except Exception as exc:
             logger.warning(
