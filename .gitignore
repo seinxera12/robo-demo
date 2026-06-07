@@ -63,3 +63,11 @@ models/
 installer/vc_redist.x64.exe
 =========
 >>>>>>>>> Temporary merge branch 2
+
+
+DemoVoiceAssistant.spec
+assets/
+build.bat
+hooks/
+launcher.py
+server/setup_screen.py
