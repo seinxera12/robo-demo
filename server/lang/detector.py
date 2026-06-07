@@ -11,14 +11,15 @@ from __future__ import annotations
 from server.models import TranscriptionResult
 
 # Languages supported by the TTS router.
-_SUPPORTED: frozenset[str] = frozenset({"en", "ja"})
+_SUPPORTED: frozenset[str] = frozenset({"en", "ja", "ko", "zh"})
 _DEFAULT: str = "en"
 
 
 class LanguageDetector:
     """Maps a TranscriptionResult's language field to a supported language code.
 
-    Supported codes: ``"en"`` (English) and ``"ja"`` (Japanese).
+    Supported codes: ``"en"`` (English), ``"ja"`` (Japanese),
+    ``"ko"`` (Korean), and ``"zh"`` (Mandarin Chinese).
     Any other value — including an empty string — falls back to ``"en"``.
     """
 
@@ -35,8 +36,8 @@ class LanguageDetector:
         Returns
         -------
         str
-            ``"en"`` or ``"ja"``.  Defaults to ``"en"`` for all unrecognised
-            or empty codes.
+            ``"en"``, ``"ja"``, ``"ko"``, or ``"zh"``.  Defaults to ``"en"``
+            for all unrecognised or empty codes.
         """
         lang = result.language.strip().lower()
         return lang if lang in _SUPPORTED else _DEFAULT

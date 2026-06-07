@@ -94,11 +94,23 @@ class Config:
     server_host: str = "0.0.0.0"
     server_port: int = 8000
     ws_port: int = 8000
+    building_nav_origin: str = "http://localhost:8001"  # CORS origin for building-nav backend
 
     @classmethod
     def from_env(cls) -> "Config":
+        import logging as _logging
         # Load from the resolved config path (AppData in frozen, project root in dev)
         load_dotenv(dotenv_path=CONFIG_PATH, override=False)
+
+        # BUILDING_NAV_ORIGIN — default with a startup warning when unset
+        building_nav_origin = os.getenv("BUILDING_NAV_ORIGIN", "")
+        if not building_nav_origin:
+            _logging.getLogger(__name__).warning(
+                "BUILDING_NAV_ORIGIN is not set — defaulting to http://localhost:8001. "
+                "Set BUILDING_NAV_ORIGIN in .env for production deployments."
+            )
+            building_nav_origin = "http://localhost:8001"
+
         return cls(
             groq_api_key=os.environ["GROQ_API_KEY"],
             gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
@@ -110,4 +122,5 @@ class Config:
             server_host=os.getenv("SERVER_HOST", "0.0.0.0"),
             server_port=int(os.getenv("SERVER_PORT", "8000")),
             ws_port=int(os.getenv("WS_PORT", "8000")),
+            building_nav_origin=building_nav_origin,
         )

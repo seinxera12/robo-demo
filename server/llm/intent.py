@@ -30,6 +30,8 @@ _VALID_INTENTS = frozenset([
     "web_search",
     "out_of_scope",
     "clarify",
+    "navigation",             # user wants to find/go to a location in the building
+    "accessibility_request",  # user expresses a mobility/accessibility constraint
 ])
 
 
@@ -39,12 +41,14 @@ class IntentResult:
     
     Attributes:
         intent: One of "general", "environment", "web_search",
-                "out_of_scope", or "clarify"
-        language: Detected language code ("ja", "en", or "unknown")
+                "out_of_scope", "clarify", "navigation", or "accessibility_request"
+        language: Detected language code ("ja", "en", "ko", "zh", or "unknown")
         confidence: Confidence score in range [0.0, 1.0]
         needs_clarification: Whether the user input requires clarification
         clarification_reason: Optional explanation of why clarification is needed
         query_clean: User intent restated clearly for downstream processing
+        destination_query: Extracted destination phrase for navigation/accessibility intents
+        accessibility_flag: True when the user expressed a mobility/accessibility constraint
     """
     intent: str
     language: str
@@ -52,10 +56,12 @@ class IntentResult:
     needs_clarification: bool
     clarification_reason: str | None
     query_clean: str
+    destination_query: str | None = None   # populated for navigation / accessibility_request
+    accessibility_flag: bool = False        # True when mobility constraint expressed
     
     def __post_init__(self) -> None:
         """Validate and normalize field values after initialization."""
-        # Validate intent is one of the six valid values
+        # Validate intent is one of the valid values
         if self.intent not in _VALID_INTENTS:
             raise ValueError(
                 f"Invalid intent '{self.intent}'. Must be one of: "
@@ -64,6 +70,10 @@ class IntentResult:
         
         # Clamp confidence to [0.0, 1.0]
         self.confidence = max(0.0, min(1.0, self.confidence))
+
+        # Normalise empty-string destination_query to None
+        if self.destination_query == "":
+            self.destination_query = None
 
 
 class IntentClassifier:
@@ -162,6 +172,8 @@ class IntentClassifier:
                 needs_clarification=bool(data["needs_clarification"]),
                 clarification_reason=data.get("clarification_reason"),
                 query_clean=data["query_clean"],
+                destination_query=data.get("destination_query") or None,
+                accessibility_flag=bool(data.get("accessibility_flag", False)),
             )
         
         except (json.JSONDecodeError, ValueError, KeyError) as exc:
@@ -186,4 +198,6 @@ class IntentClassifier:
             needs_clarification=False,
             clarification_reason=None,
             query_clean=raw_output[:200],
+            destination_query=None,
+            accessibility_flag=False,
         )

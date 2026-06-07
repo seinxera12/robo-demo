@@ -13,22 +13,22 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
 
 ## Tasks
 
-- [ ] 1. Extend `server/config.py` with `BUILDING_NAV_ORIGIN`
+- [x] 1. Extend `server/config.py` with `BUILDING_NAV_ORIGIN`
   - Add `building_nav_origin: str = "http://localhost:8001"` field to the `Config` dataclass
   - In `Config.from_env()`, read `os.getenv("BUILDING_NAV_ORIGIN", "")` and default to
     `"http://localhost:8001"` when unset, logging a startup warning via `logging.getLogger(__name__).warning()`
   - Add `BUILDING_NAV_ORIGIN=` (empty) to `.env.example` with a comment explaining the default
   - _Requirements: 1.4, 1.5_
 
-- [ ] 2. Expand `server/lang/detector.py` to support Korean and Mandarin Chinese
+- [x] 2. Expand `server/lang/detector.py` to support Korean and Mandarin Chinese
   - Change `_SUPPORTED` frozenset from `{"en", "ja"}` to `{"en", "ja", "ko", "zh"}`
   - Leave `detect()` method body unchanged — the frozenset membership check handles the rest
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 3. Extend `server/llm/intent.py` with navigation intents and new `IntentResult` fields
-  - [ ] 3.1 Add `"navigation"` and `"accessibility_request"` to `_VALID_INTENTS` frozenset
+- [-] 3. Extend `server/llm/intent.py` with navigation intents and new `IntentResult` fields
+  - [x] 3.1 Add `"navigation"` and `"accessibility_request"` to `_VALID_INTENTS` frozenset
     - _Requirements: 6.8_
-  - [ ] 3.2 Add `destination_query: str | None = None` and `accessibility_flag: bool = False`
+  - [x] 3.2 Add `destination_query: str | None = None` and `accessibility_flag: bool = False`
     fields to the `IntentResult` dataclass (append after existing fields so existing construction
     sites are not broken)
     - In `IntentResult.__post_init__()`, normalise empty-string `destination_query` to `None`:
@@ -40,7 +40,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Ensure `_default_result()` also passes `destination_query=None, accessibility_flag=False`
     - _Requirements: 6.3, 6.5, 6.6, 6.9_
 
-- [ ] 4. Update `server/prompts/classifier.txt` with navigation intent definitions
+- [x] 4. Update `server/prompts/classifier.txt` with navigation intent definitions
   - Add `"navigation"` intent definition: user wants to find or go to a location/room/facility;
     extract destination in `destination_query`; set `accessibility_flag: true` for mobility constraints
   - Add `"accessibility_request"` intent definition: user expresses a mobility/accessibility need
@@ -49,7 +49,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     JSON schema block; show both fields present in every response (null/false for non-navigation intents)
   - _Requirements: 6.7_
 
-- [ ] 5. Add `KokoroChineseTTS` class to `server/tts/kokoro_tts.py`
+- [x] 5. Add `KokoroChineseTTS` class to `server/tts/kokoro_tts.py`
   - Implement `KokoroChineseTTS` following the exact pattern of `KokoroJapaneseTTS`:
     - `DEFAULT_VOICE = "zf_xiaobei"`
     - `__init__` sets `self._pipeline = None`
@@ -63,14 +63,14 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - `async synthesize(text)` uses `loop.run_in_executor(None, _synthesize_sync, text)`
   - _Requirements: 7.6, 7.13_
 
-- [ ] 6. Update `server/tts/tts_router.py` to route Mandarin Chinese
-  - [ ] 6.1 Split `_CJK_RE` into two separate compiled patterns:
+- [-] 6. Update `server/tts/tts_router.py` to route Mandarin Chinese
+  - [x] 6.1 Split `_CJK_RE` into two separate compiled patterns:
     - `_HIRAGANA_KATAKANA = re.compile(r'[\u3040-\u309f\u30a0-\u30ff]')`
     - `_CJK_IDEOGRAPH = re.compile(r'[\u4e00-\u9fff]')`
     - Update `_detect_language_from_text(text)` to return `"ja"` if `_HIRAGANA_KATAKANA.search(text)`,
       else `"zh"` if `_CJK_IDEOGRAPH.search(text)`, else `"en"`
     - _Requirements: 7.7, 7.8_
-  - [ ] 6.2 Add `zh_tts: KokoroChineseTTS` parameter to `TTSRouter.__init__`, store as `self._zh_tts`
+  - [x] 6.2 Add `zh_tts: KokoroChineseTTS` parameter to `TTSRouter.__init__`, store as `self._zh_tts`
     - Update the import at the top of the file: `from server.tts.kokoro_tts import KokoroTTS, KokoroJapaneseTTS, KokoroChineseTTS`
     - _Requirements: 7.6_
   - [ ] 6.3 Update `TTSRouter.synthesize()` to route `"zh"` to `self._zh_tts`:
@@ -80,8 +80,8 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Update the debug log call to reflect three-way routing
     - _Requirements: 7.7, 7.8, 7.9_
 
-- [ ] 7. Update `server/llm/assembler.py` to load KO/ZH prompt blocks and accept `building_context`
-  - [ ] 7.1 In `PromptAssembler._load_prompt_files()`, load `lang_ko.txt` and `lang_zh.txt` with
+- [x] 7. Update `server/llm/assembler.py` to load KO/ZH prompt blocks and accept `building_context`
+  - [x] 7.1 In `PromptAssembler._load_prompt_files()`, load `lang_ko.txt` and `lang_zh.txt` with
     the same optional-with-warning fallback pattern used for `lang_ja_formal.txt`:
     ```python
     for lang_code, filename in [("ko", "lang_ko.txt"), ("zh", "lang_zh.txt")]:
@@ -94,10 +94,10 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
             self._prompt_cache[filename] = self._prompt_cache["lang_unknown.txt"]
     ```
     - _Requirements: 7.10, 10.7_
-  - [ ] 7.2 In `PromptAssembler._select_language_block()`, add `"ko": "lang_ko.txt"` and
+  - [x] 7.2 In `PromptAssembler._select_language_block()`, add `"ko": "lang_ko.txt"` and
     `"zh": "lang_zh.txt"` to the `language_files` dict
     - _Requirements: 7.10_
-  - [ ] 7.3 Add optional `building_context: dict | None = None` parameter to
+  - [x] 7.3 Add optional `building_context: dict | None = None` parameter to
     `PromptAssembler.assemble_prompt()`
     - Add helper `_render_building_context_block(ctx: dict) -> str` at module level:
       ```python
@@ -116,8 +116,8 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - When absent, preserve the existing four-block order
     - _Requirements: 5.4_
 
-- [ ] 8. Create Korean and Mandarin Chinese prompt files
-  - [ ] 8.1 Create `server/prompts/lang_ko.txt` with Korean language/tone instructions:
+- [x] 8. Create Korean and Mandarin Chinese prompt files
+  - [x] 8.1 Create `server/prompts/lang_ko.txt` with Korean language/tone instructions:
     ```
     # Language: Korean (한국어)
 
@@ -128,7 +128,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     When giving directions, use clear Korean directional terms (왼쪽, 오른쪽, 앞으로, etc.).
     ```
     - _Requirements: 7.11_
-  - [ ] 8.2 Create `server/prompts/lang_zh.txt` with Mandarin Chinese language/tone instructions:
+  - [x] 8.2 Create `server/prompts/lang_zh.txt` with Mandarin Chinese language/tone instructions:
     ```
     # Language: Mandarin Chinese (普通话)
 
@@ -140,8 +140,8 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     ```
     - _Requirements: 7.12_
 
-- [ ] 9. Create `server/api/` package with endpoint modules
-  - [ ] 9.1 Create `server/api/__init__.py` — exports a single `api_router`:
+- [x] 9. Create `server/api/` package with endpoint modules
+  - [x] 9.1 Create `server/api/__init__.py` — exports a single `api_router`:
     ```python
     from fastapi import APIRouter
     from server.api import stt, tts, detect_language, navigate, health
@@ -155,7 +155,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     ```
     - _Requirements: 11.4, 11.5_
 
-  - [ ] 9.2 Create `server/api/stt.py` — `POST /api/stt`:
+  - [x] 9.2 Create `server/api/stt.py` — `POST /api/stt`:
     - Define `STTResponse(BaseModel)` with `text: str` and `language: str`
     - `stt_endpoint(request: Request, file: UploadFile = File(...)) -> STTResponse`:
       - Read `await file.read()` → `audio_bytes`; raise HTTP 422 if zero bytes
@@ -165,7 +165,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
       - Return `STTResponse(text=result.text, language=result.language)`
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 11.1, 12.1, 12.4_
 
-  - [ ] 9.3 Create `server/api/tts.py` — `POST /api/tts`:
+  - [x] 9.3 Create `server/api/tts.py` — `POST /api/tts`:
     - Define `TTSRequest(BaseModel)` with `text: str = Field(..., min_length=1)` and `language: str`
       - Add `@validator("text")` that rejects whitespace-only strings with `ValueError`
       - Add `@validator("language")` that rejects values not in `{"en","ja","zh","ko"}` with `ValueError`
@@ -178,7 +178,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
       - Return `Response(content=wav_bytes, media_type="audio/wav")`
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 11.2, 12.2, 12.4_
 
-  - [ ] 9.4 Create `server/api/detect_language.py` — `POST /api/detect-language`:
+  - [x] 9.4 Create `server/api/detect_language.py` — `POST /api/detect-language`:
     - Define `DetectLanguageRequest(BaseModel)` with `text: str = Field(..., min_length=1)`
     - Define `DetectLanguageResponse(BaseModel)` with `language: str`
     - Implement module-level pure function:
@@ -198,7 +198,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
       returns `DetectLanguageResponse(language=detect_language_from_text(body.text))`
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
-  - [ ] 9.5 Create `server/api/navigate.py` — `POST /api/navigate` and `run_navigate_turn()`:
+  - [x] 9.5 Create `server/api/navigate.py` — `POST /api/navigate` and `run_navigate_turn()`:
     - Define `BuildingContext(BaseModel)` with `current_node_label: str`,
       `available_pois: list[str]`, `floor_name: str`
     - Define `NavigateRequest(BaseModel)` with `text`, `language`, `session_id`,
@@ -228,7 +228,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Log at INFO: endpoint, status, latency_ms, language, intent (never log `text`)
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 8.1, 8.2, 8.7, 11.3, 12.3, 12.4_
 
-  - [ ] 9.6 Create `server/api/health.py` — `GET /api/health`:
+  - [x] 9.6 Create `server/api/health.py` — `GET /api/health`:
     - Define `HealthResponse(BaseModel)` with `status: str`, `tts_ready: bool`, `stt_ready: bool`
     - `health_endpoint(request: Request) -> HealthResponse`:
       - `tts_ready = getattr(request.app.state, "tts_warmed_up", False)`
@@ -237,13 +237,13 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - No blocking I/O, no external calls
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
-- [ ] 10. Checkpoint — verify module structure compiles before wiring
+- [x] 10. Checkpoint — verify module structure compiles before wiring
   - Ensure all new files in `server/api/` import without errors
   - Run `python -m py_compile server/api/stt.py server/api/tts.py server/api/detect_language.py server/api/navigate.py server/api/health.py server/api/__init__.py`
   - Ensure all modified files also compile: `server/lang/detector.py`, `server/llm/intent.py`, `server/tts/kokoro_tts.py`, `server/tts/tts_router.py`, `server/llm/assembler.py`
 
-- [ ] 11. Wire all changes into `server/main.py`
-  - [ ] 11.1 Add `CORSMiddleware` registration immediately after `app = FastAPI(...)`:
+- [x] 11. Wire all changes into `server/main.py`
+  - [x] 11.1 Add `CORSMiddleware` registration immediately after `app = FastAPI(...)`:
     ```python
     from fastapi.middleware.cors import CORSMiddleware
     app.add_middleware(
@@ -255,14 +255,14 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     ```
     Note: CORS middleware must be added before `app.include_router()`; read `config` from `app.state.config` or restructure so config is available at app-creation time
     - _Requirements: 1.1, 1.2, 1.3_
-  - [ ] 11.2 Add `KokoroChineseTTS` import and instantiation in the lifespan startup block:
+  - [x] 11.2 Add `KokoroChineseTTS` import and instantiation in the lifespan startup block:
     ```python
     from server.tts.kokoro_tts import KokoroTTS, KokoroJapaneseTTS, KokoroChineseTTS
     kokoro_zh_tts = KokoroChineseTTS()
     tts_router = TTSRouter(en_tts=kokoro_tts, ja_tts=kokoro_ja_tts, zh_tts=kokoro_zh_tts)
     ```
     - _Requirements: 7.6_
-  - [ ] 11.3 Add `kokoro_zh_tts.warm_up` to the `asyncio.gather` warm-up call, and set
+  - [x] 11.3 Add `kokoro_zh_tts.warm_up` to the `asyncio.gather` warm-up call, and set
     `app.state.tts_warmed_up = True` inside the `try` block after the gather succeeds
     (leave `tts_warmed_up` at `False` if the warm-up raises):
     ```python
@@ -274,13 +274,13 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     app.state.tts_warmed_up = True
     ```
     - _Requirements: 7.13, 9.2, 9.6_
-  - [ ] 11.4 Store additional state entries in `app.state` after all components are ready:
+  - [x] 11.4 Store additional state entries in `app.state` after all components are ready:
     ```python
     app.state.kokoro_zh_tts = kokoro_zh_tts
     app.state.navigate_sessions = {}  # dict[str, NavigateSession]
     ```
     - _Requirements: 8.1_
-  - [ ] 11.5 Create and launch the background session cleanup task inside the lifespan block
+  - [x] 11.5 Create and launch the background session cleanup task inside the lifespan block
     (before `yield`):
     ```python
     from datetime import datetime, timedelta
@@ -299,19 +299,19 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     asyncio.create_task(_cleanup_sessions())
     ```
     - _Requirements: 8.5_
-  - [ ] 11.6 Include the API router after the middleware and before the static file mount:
+  - [x] 11.6 Include the API router after the middleware and before the static file mount:
     ```python
     from server.api import api_router
     app.include_router(api_router)
     ```
     - _Requirements: 11.4, 11.5, 11.6_
 
-- [ ] 12. Checkpoint — verify server starts and WebSocket endpoints are unbroken
+- [x] 12. Checkpoint — verify server starts and WebSocket endpoints are unbroken
   - Run `python -m py_compile server/main.py` to confirm no import or syntax errors
   - Ensure all `app.state` accesses in new endpoint modules match the keys set in `lifespan`
   - Confirm existing `/ws` and `/ws/ui` routes still appear in `app.routes`
 
-- [ ] 13. Update `config/deployment.yaml` for the building-nav deployment
+- [x] 13. Update `config/deployment.yaml` for the building-nav deployment
   - Replace the contents of `config/deployment.yaml` with the building-nav configuration:
     ```yaml
     deployment_id: "building-nav"
@@ -343,7 +343,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     ```
   - _Requirements: 10.4, 10.5_
 
-- [ ] 15. Write property-based tests for `detect_language_from_text()` (Properties 1–5)
+- [x] 15. Write property-based tests for `detect_language_from_text()` (Properties 1–5)
   - Create `tests/properties/test_detect_language_properties.py`
   - [ ]* 15.1 Write property test for output domain invariant (Property 1)
     - `@given(text=st.text(min_size=1))` — assert result in `{"en","ja","zh","ko"}`
@@ -366,7 +366,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - **Property 5: detect-language idempotence**
     - **Validates: Requirements 4.7**
 
-- [ ] 16. Write property-based tests for `LanguageDetector` (Properties 6–7)
+- [x] 16. Write property-based tests for `LanguageDetector` (Properties 6–7)
   - Create `tests/properties/test_language_detector_properties.py`
   - [ ]* 16.1 Write property test for LanguageDetector output domain (Property 6)
     - `@given(language=st.text())` — create `TranscriptionResult(text="x", language=language)`,
@@ -378,14 +378,14 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - **Property 7: LanguageDetector round-trip for supported codes**
     - **Validates: Requirements 7.1–7.4**
 
-- [ ] 17. Write property-based tests for `_detect_language_from_text()` in `tts_router.py` (Property 8)
+- [x] 17. Write property-based tests for `_detect_language_from_text()` in `tts_router.py` (Property 8)
   - Create `tests/properties/test_tts_router_properties.py`
   - [ ]* 17.1 Write property test for TTSRouter text-based language discrimination (Property 8)
     - Three sub-cases: kana present → `"ja"`; CJK only (no kana) → `"zh"`; neither → `"en"`
     - **Property 8: TTSRouter text-based language discrimination**
     - **Validates: Requirements 7.7, 7.8**
 
-- [ ] 18. Write property-based tests for `IntentResult` field invariants (Properties 9–10)
+- [x] 18. Write property-based tests for `IntentResult` field invariants (Properties 9–10)
   - Create `tests/properties/test_intent_result_properties.py`
   - [ ]* 18.1 Write property test for `accessibility_flag` type invariant (Property 9)
     - `@given(accessibility_flag=st.one_of(st.booleans(), st.integers(), st.none(), st.text()))`
@@ -399,7 +399,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - **Property 10: IntentResult destination_query normalisation**
     - **Validates: Requirements 6.4, 6.9**
 
-- [ ] 19. Write property-based tests for session management (Properties 14–15)
+- [x] 19. Write property-based tests for session management (Properties 14–15)
   - Create `tests/properties/test_session_management_properties.py`
   - [ ]* 19.1 Write property test for history length bound (Property 14)
     - `@given(num_calls=st.integers(1,30), memory_turns=st.integers(1,10))` — simulate N append+trim
@@ -412,9 +412,9 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - **Property 15: Session cleanup correctness**
     - **Validates: Requirements 8.3, 8.5**
 
-- [ ] 20. Write unit tests for each endpoint and modified module
+- [x] 20. Write unit tests for each endpoint and modified module
   - Create `tests/api/` package with the following test files:
-  - [ ]* 20.1 Create `tests/api/test_stt_endpoint.py`
+  - [x]* 20.1 Create `tests/api/test_stt_endpoint.py`
     - Mock `app.state.stt_backend.transcribe` to return a known `TranscriptionResult`
     - Test: HTTP 200 with correct `text` and `language` fields
     - Test: HTTP 422 when file field is absent
@@ -422,7 +422,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Test: HTTP 502 when `transcribe()` raises `Exception`
     - Test: response `text` and `language` match exactly what `transcribe()` returned (passthrough)
     - _Requirements: 2.1–2.7_
-  - [ ]* 20.2 Create `tests/api/test_tts_endpoint.py`
+  - [x]* 20.2 Create `tests/api/test_tts_endpoint.py`
     - Mock `app.state.tts_router.synthesize` to return a minimal valid WAV bytes constant
     - Test: HTTP 200 with `Content-Type: audio/wav` for `language` in `{"en","ja","zh"}`
     - Test: HTTP 406 with `{"fallback":"browser_tts","language":"ko"}` for `language="ko"` (synthesize NOT called)
@@ -431,7 +431,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Test: HTTP 422 for unknown `language`
     - Test: HTTP 502 when `synthesize()` raises
     - _Requirements: 3.1–3.8_
-  - [ ]* 20.3 Create `tests/api/test_detect_language_endpoint.py`
+  - [x]* 20.3 Create `tests/api/test_detect_language_endpoint.py`
     - No mocking needed — pure function
     - Test: hiragana text → `"ja"`; katakana text → `"ja"`; mixed kana+CJK → `"ja"`
     - Test: CJK-only text → `"zh"`
@@ -439,7 +439,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Test: ASCII text → `"en"`
     - Test: HTTP 422 for empty `text`
     - _Requirements: 4.1–4.7_
-  - [ ]* 20.4 Create `tests/api/test_navigate_endpoint.py`
+  - [x]* 20.4 Create `tests/api/test_navigate_endpoint.py`
     - Mock `run_navigate_turn` to return a fixed `NavigateTurnResult`
     - Test: HTTP 200 with all seven required response fields present and typed correctly
     - Test: `session_id` in response equals `session_id` in request
@@ -451,13 +451,13 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Test: HTTP 502 when `run_navigate_turn` raises `ClassifyError`
     - Test: HTTP 502 when `run_navigate_turn` raises `LLMError`
     - _Requirements: 5.1–5.12_
-  - [ ]* 20.5 Create `tests/api/test_health_endpoint.py`
+  - [x]* 20.5 Create `tests/api/test_health_endpoint.py`
     - Test: HTTP 200 with `{"status":"ok","tts_ready":true,"stt_ready":true}` when fully warmed up
     - Test: `tts_ready: false` when `app.state.tts_warmed_up` is `False`
     - Test: `stt_ready: false` when `groq_api_key` is empty string
     - Test: no request body required
     - _Requirements: 9.1–9.6_
-  - [ ]* 20.6 Create `tests/api/test_intent_result.py`
+  - [x]* 20.6 Create `tests/api/test_intent_result.py`
     - Test: `destination_query=""` is normalised to `None` in `__post_init__`
     - Test: `destination_query="cafeteria"` is preserved unchanged
     - Test: `accessibility_flag` is always a `bool` instance
@@ -466,7 +466,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Test: LLM JSON missing `accessibility_flag` does not raise, defaults to `False`
     - Test: existing intents (`general`, `environment`, etc.) still accepted by `_VALID_INTENTS`
     - _Requirements: 6.4, 6.6, 6.8, 6.9_
-  - [ ]* 20.7 Create `tests/api/test_cors.py`
+  - [x]* 20.7 Create `tests/api/test_cors.py`
     - Test: preflight `OPTIONS /api/stt` from the allowed origin returns correct `Access-Control-Allow-*` headers
     - Test: preflight from a disallowed origin does not return `Access-Control-Allow-Origin` for that origin
     - _Requirements: 1.1, 1.2, 1.3_

@@ -87,6 +87,26 @@ class DeploymentConfig:
         return cls()
 
 
+def _render_building_context_block(ctx: dict) -> str:
+    """Render a building context block from a context dict.
+
+    Args:
+        ctx: Dict with keys ``current_node_label``, ``available_pois`` (list),
+             and ``floor_name``.
+
+    Returns:
+        Formatted building context string to inject into the system prompt.
+    """
+    pois = ", ".join(ctx.get("available_pois", []))
+    return (
+        "# Building Context\n"
+        f"Current location: {ctx.get('current_node_label', 'unknown')}\n"
+        f"Floor: {ctx.get('floor_name', 'unknown')}\n"
+        f"Available destinations in this building: {pois}\n"
+        "Only suggest destinations from this list. Do not invent locations."
+    )
+
+
 def detect_model_tier(model_name: str) -> str:
     """
     Detect the model tier based on the model name.
@@ -205,6 +225,18 @@ class PromptAssembler:
                 "falling back to lang_ja.txt for formal tone"
             )
             self._prompt_cache["lang_ja_formal.txt"] = self._prompt_cache["lang_ja.txt"]
+
+        # Load optional lang_ko.txt and lang_zh.txt — fall back to lang_unknown.txt with warning
+        for filename in ["lang_ko.txt", "lang_zh.txt"]:
+            lang_path = self.prompts_dir / filename
+            if lang_path.exists():
+                with open(lang_path, 'r', encoding='utf-8') as f:
+                    self._prompt_cache[filename] = f.read()
+            else:
+                logger.warning(
+                    "Prompt file %s not found, falling back to lang_unknown.txt", filename
+                )
+                self._prompt_cache[filename] = self._prompt_cache["lang_unknown.txt"]
     
     def _render_deployment_block(self, detected_language: str) -> str:
         """
@@ -316,6 +348,8 @@ If asked something out of scope, respond with:
         language_files = {
             "ja": "lang_ja.txt",
             "en": "lang_en.txt",
+            "ko": "lang_ko.txt",
+            "zh": "lang_zh.txt",
             "unknown": "lang_unknown.txt",
         }
         
@@ -365,6 +399,7 @@ If asked something out of scope, respond with:
         session_history: list[dict],
         retrieved_context: str = "",
         route_type: str = "general",
+        building_context: dict | None = None,
     ) -> tuple[str, list[dict]]:
         """
         Assemble the complete system prompt and messages array.
@@ -378,6 +413,10 @@ If asked something out of scope, respond with:
             session_history: List of previous user/assistant message dicts
             retrieved_context: Retrieved context for environment/web_search routes
             route_type: The selected route type ("general", "environment", "web_search", etc.)
+            building_context: Optional building context dict injected as an extra prompt block.
+                Contains ``current_node_label``, ``available_pois``, and ``floor_name``.
+                When provided, a building context block is inserted between the deployment
+                block and the language block.
             
         Returns:
             Tuple of (system_prompt: str, messages: list[dict]) where:
@@ -396,38 +435,24 @@ If asked something out of scope, respond with:
         
         # Get the route context block
         route_context_block = self._get_route_context_block(route_type, retrieved_context)
-        
+
         # -----------------------------------------------------------------------
         # Block assembly order (each block is joined with a double newline):
         #
         #  1. base block       — Core persona and universal behaviour rules.
-        #                        Loaded from base.txt (groq tier) or
-        #                        base_small.txt (small tier).  Always present.
-        #
-        #  2. deployment block — Location-specific identity, role description,
-        #                        and out-of-scope response text.  Rendered at
-        #                        runtime from DeploymentConfig fields so that the
-        #                        same codebase can serve different deployments
-        #                        without changing prompt files.
-        #
-        #  3. language block   — Language and tone instructions for the detected
-        #                        user language (lang_ja.txt / lang_en.txt /
-        #                        lang_unknown.txt).  Placed after deployment so
-        #                        language rules can reference the role context.
-        #
-        #  4. route context    — Task-specific instructions and any retrieved
-        #                        context (RAG chunks or search results).  Placed
-        #                        last so it is closest to the user message and
-        #                        receives the highest attention from the model.
+        #  2. deployment block — Location-specific identity, role, OOS response.
+        #  3. building context — (optional) Current location, floor, available POIs.
+        #                        Injected here so the LLM knows what destinations
+        #                        exist before receiving language/tone instructions.
+        #  4. language block   — Language and tone instructions for detected language.
+        #  5. route context    — Task-specific instructions and retrieved context.
         # -----------------------------------------------------------------------
-        # Assemble blocks in order: base → deployment → language → route context
-        # Join with double newlines
-        system_prompt = "\n\n".join([
-            base_block,
-            deployment_block,
-            language_block,
-            route_context_block,
-        ])
+        blocks = [base_block, deployment_block]
+        if building_context:
+            blocks.append(_render_building_context_block(building_context))
+        blocks.extend([language_block, route_context_block])
+
+        system_prompt = "\n\n".join(blocks)
         
         # Build messages array
         messages = [

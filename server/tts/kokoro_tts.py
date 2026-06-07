@@ -139,3 +139,53 @@ class KokoroJapaneseTTS:
     async def synthesize(self, text: str) -> bytes:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self._synthesize_sync, text)
+
+
+class KokoroChineseTTS:
+    """Mandarin Chinese TTS using Kokoro KPipeline(lang_code='z')."""
+
+    DEFAULT_VOICE = "zf_xiaobei"
+
+    def __init__(self) -> None:
+        self._pipeline: Optional[object] = None
+
+    def _get_pipeline(self):
+        if self._pipeline is None:
+            from kokoro import KPipeline
+            tts_log.info("init_pipeline  engine=KokoroChineseTTS  lang=zh")
+            self._pipeline = KPipeline(lang_code='z')
+            tts_log.info("pipeline_ready  engine=KokoroChineseTTS  lang=zh")
+        return self._pipeline
+
+    def _synthesize_sync(self, text: str) -> bytes:
+        t0 = time.monotonic()
+        pipeline = self._get_pipeline()
+        audio_chunks = []
+        for _, _, audio in pipeline(text, voice=self.DEFAULT_VOICE):
+            audio_chunks.append(audio)
+        if not audio_chunks:
+            tts_log.warning("synthesis_empty  engine=KokoroChineseTTS  text=%r", text[:80])
+            return b""
+        audio_array = np.concatenate(audio_chunks)
+        buf = io.BytesIO()
+        sf.write(buf, audio_array, 24000, format='WAV')
+        buf.seek(0)
+        wav_bytes = buf.read()
+        ms = int((time.monotonic() - t0) * 1000)
+        duration_ms = int(len(audio_array) / 24000 * 1000)
+        tts_log.info(
+            "synthesised  engine=KokoroChineseTTS  text=%r  wav_bytes=%d  "
+            "synthesis_ms=%d  audio_duration_ms=%d",
+            text[:80], len(wav_bytes), ms, duration_ms,
+        )
+        return wav_bytes
+
+    def warm_up(self) -> None:
+        """Pre-load the Kokoro Chinese pipeline and voice file without producing audio."""
+        pipeline = self._get_pipeline()
+        pipeline.load_voice(self.DEFAULT_VOICE)
+        tts_log.info("warm_up_complete  engine=KokoroChineseTTS  voice=%s", self.DEFAULT_VOICE)
+
+    async def synthesize(self, text: str) -> bytes:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._synthesize_sync, text)

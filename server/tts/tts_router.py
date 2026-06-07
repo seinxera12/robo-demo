@@ -25,7 +25,7 @@ import logging
 import re
 from typing import Optional
 
-from server.tts.kokoro_tts import KokoroTTS, KokoroJapaneseTTS
+from server.tts.kokoro_tts import KokoroTTS, KokoroJapaneseTTS, KokoroChineseTTS
 
 logger = logging.getLogger(__name__)
 
@@ -57,19 +57,25 @@ _ABBREV_RE = re.compile(
     re.IGNORECASE,
 )
 
-# CJK Unified Ideographs + Hiragana + Katakana + CJK punctuation
-_CJK_RE = re.compile(
-    r'[\u3000-\u303f'   # CJK punctuation
-    r'\u3040-\u309f'    # Hiragana
-    r'\u30a0-\u30ff'    # Katakana
-    r'\u4e00-\u9fff'    # CJK Unified Ideographs (common)
-    r'\uff00-\uffef]'   # Halfwidth/Fullwidth forms
-)
+# Language detection patterns for TTS routing.
+# Priority when detecting from text: JA (kana) > ZH (CJK ideographs only) > EN
+_HIRAGANA_KATAKANA = re.compile(r'[\u3040-\u309f\u30a0-\u30ff]')   # Hiragana + Katakana
+_CJK_IDEOGRAPH = re.compile(r'[\u4e00-\u9fff]')                     # CJK Unified Ideographs
 
 
 def _detect_language_from_text(text: str) -> str:
-    """Return 'ja' if the text contains CJK/kana characters, else 'en'."""
-    return "ja" if _CJK_RE.search(text) else "en"
+    """Return 'ja', 'zh', or 'en' based on Unicode character ranges in *text*.
+
+    Priority order:
+      1. Hiragana or Katakana present → 'ja' (Japanese — kana is unambiguous)
+      2. CJK Unified Ideographs present (no kana) → 'zh' (Mandarin Chinese)
+      3. Neither → 'en' (English / other Latin-script language)
+    """
+    if _HIRAGANA_KATAKANA.search(text):
+        return "ja"
+    if _CJK_IDEOGRAPH.search(text):
+        return "zh"
+    return "en"
 
 
 def _is_sentence_boundary(buf: str, pos: int) -> bool:
@@ -118,36 +124,48 @@ def _is_sentence_boundary(buf: str, pos: int) -> bool:
 class TTSRouter:
     """Routes TTS synthesis to the appropriate Kokoro pipeline."""
 
-    def __init__(self, en_tts: KokoroTTS, ja_tts: KokoroJapaneseTTS) -> None:
+    def __init__(self, en_tts: KokoroTTS, ja_tts: KokoroJapaneseTTS, zh_tts: KokoroChineseTTS) -> None:
         self._en_tts = en_tts
         self._ja_tts = ja_tts
+        self._zh_tts = zh_tts
         self._buffer: str = ""
 
     async def synthesize(self, text: str, language: str) -> bytes:
         """Synthesize *text* using the TTS engine appropriate for *language*.
 
-        If *language* is 'ja', or if the text itself contains Japanese/CJK
-        characters (auto-detection fallback for the text-input path), routes
-        to KokoroJapaneseTTS. Otherwise uses KokoroTTS (English).
+        Language routing uses two signals in priority order:
+          1. Text-based auto-detection via Unicode ranges (kana → JA, CJK-only → ZH).
+          2. Explicit *language* hint — overrides auto-detection when the detected
+             effective language differs and *language* is a known supported code.
+             This handles the text-input path where text may be purely ASCII even
+             when the session language is 'ja' or 'zh'.
 
         Returns 24 kHz WAV bytes (complete WAV file with header).
         """
-        effective_language = _detect_language_from_text(text)
-        if effective_language != language:
-            logger.debug(
-                "TTSRouter: language override %r → %r based on text content",
-                language, effective_language,
-            )
+        from server.log import tts_log
+        effective = _detect_language_from_text(text)
+        # Allow the explicit language hint to override when text-based detection
+        # disagrees and the hint is a known synthesisable code.
+        if effective != language and language in ("en", "ja", "zh"):
+            effective = language
 
-        if effective_language == "ja":
-            from server.log import tts_log
-            tts_log.info("route  text=%r  passed_lang=%s  effective_lang=ja  engine=KokoroJapaneseTTS",
-                         text[:40], language)
+        if effective == "ja":
+            tts_log.info(
+                "route  text=%r  passed_lang=%s  effective_lang=ja  engine=KokoroJapaneseTTS",
+                text[:40], language,
+            )
             return await self._ja_tts.synthesize(text)
+        elif effective == "zh":
+            tts_log.info(
+                "route  text=%r  passed_lang=%s  effective_lang=zh  engine=KokoroChineseTTS",
+                text[:40], language,
+            )
+            return await self._zh_tts.synthesize(text)
         else:
-            from server.log import tts_log
-            tts_log.info("route  text=%r  passed_lang=%s  effective_lang=en  engine=KokoroTTS",
-                         text[:40], language)
+            tts_log.info(
+                "route  text=%r  passed_lang=%s  effective_lang=en  engine=KokoroTTS",
+                text[:40], language,
+            )
             return await self._en_tts.synthesize(text)
 
     def accumulate(self, token: str) -> Optional[str]:

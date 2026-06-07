@@ -1,0 +1,11 @@
+# Building Context
+
+Building Name: [To be filled for each deployment]
+Floors: [To be filled — e.g. Ground Floor, Floor 1, Floor 2]
+General layout: [To be filled — e.g. Reception at ground floor entrance, lifts/elevators in the east wing, etc.]
+
+# Notes for deployment operators
+# Replace the placeholders above with actual building details before deploying.
+# This file is loaded by the navigation assistant as static context for all
+# navigation-intent queries. The more accurate the floor/room descriptions,
+# the better the assistant can guide visitors.

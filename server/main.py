@@ -17,6 +17,7 @@ import logging
 import sys
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from typing import Dict, Set
 
 import groq
@@ -37,9 +38,11 @@ from server.models import TranscriptionResult
 from server.pipeline import PipelineState, VoicePipeline
 from server.search.tavily_search import TavilySearchClient
 from server.stt.groq_stt import GroqSTTBackend
-from server.tts.kokoro_tts import KokoroJapaneseTTS, KokoroTTS
+from server.tts.kokoro_tts import KokoroJapaneseTTS, KokoroTTS, KokoroChineseTTS
 from server.tts.tts_router import TTSRouter
 from server.config import UI_DIST_DIR, PROMPTS_DIR, DEPLOYMENT_YAML
+from server.api import api_router
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -185,20 +188,24 @@ async def lifespan(app: FastAPI):
     # TTS engines and router
     kokoro_tts = KokoroTTS()
     kokoro_ja_tts = KokoroJapaneseTTS()
-    tts_router = TTSRouter(en_tts=kokoro_tts, ja_tts=kokoro_ja_tts)
+    kokoro_zh_tts = KokoroChineseTTS()
+    tts_router = TTSRouter(en_tts=kokoro_tts, ja_tts=kokoro_ja_tts, zh_tts=kokoro_zh_tts)
 
     # 4. Pre-warm both Kokoro TTS engines concurrently at startup
     # Requirements: 3.1, 3.2, 3.3, 3.6
-    logger.info("Pre-warming KokoroTTS and KokoroJapaneseTTS...")
+    logger.info("Pre-warming KokoroTTS, KokoroJapaneseTTS, and KokoroChineseTTS...")
     try:
         loop = asyncio.get_event_loop()
         await asyncio.gather(
             loop.run_in_executor(None, kokoro_tts.warm_up),
             loop.run_in_executor(None, kokoro_ja_tts.warm_up),
+            loop.run_in_executor(None, kokoro_zh_tts.warm_up),
         )
-        logger.info("Both Kokoro TTS engines pre-warmed successfully.")
+        logger.info("All three Kokoro TTS engines pre-warmed successfully.")
+        app.state.tts_warmed_up = True
     except Exception as exc:
         logger.warning("Kokoro TTS pre-warm failed (non-fatal): %s", exc)
+        app.state.tts_warmed_up = False
 
     # 5. Test Groq API connectivity
     logger.info("Testing Groq API connectivity...")
@@ -228,9 +235,28 @@ async def lifespan(app: FastAPI):
     app.state.router = router
     app.state.post_processor = post_processor
     app.state.tavily_client = tavily_client
+    # New state entries for building-nav REST path
+    app.state.kokoro_zh_tts = kokoro_zh_tts
+    app.state.navigate_sessions = {}   # dict[str, NavigateSession] — in-memory only
 
-    # 6. Signal readiness
-    logger.info("✅ Server ready. Accepting connections.")
+    # 6. Start background session cleanup task (runs every 5 min, TTL 30 min)
+    async def _cleanup_sessions() -> None:
+        """Remove NavigateSessions inactive for more than 30 minutes."""
+        while True:
+            await asyncio.sleep(300)  # 5 minutes
+            cutoff = datetime.utcnow() - timedelta(minutes=30)
+            sessions = app.state.navigate_sessions
+            stale = [sid for sid, s in list(sessions.items()) if s.last_active < cutoff]
+            for sid in stale:
+                sessions.pop(sid, None)
+            if stale:
+                logger.info(
+                    "session_cleanup  removed=%d  remaining=%d", len(stale), len(sessions)
+                )
+
+    asyncio.create_task(_cleanup_sessions())
+
+    # 7. Signal readiness
     pipeline_event("SERVER", "ready",
                    port=config.server_port,
                    stt_model=config.groq_stt_model,
@@ -251,6 +277,30 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="Lightweight Voice Demo", lifespan=lifespan)
+
+# ---------------------------------------------------------------------------
+# CORS middleware — allows building-nav backend origin to call /api/* endpoints
+# Config is loaded here (module-level) solely to read BUILDING_NAV_ORIGIN for
+# CORS registration before the lifespan starts.  The lifespan reloads config
+# for all other purposes and sets app.state.config for endpoint access.
+# ---------------------------------------------------------------------------
+try:
+    _startup_config = Config.from_env()
+    _allowed_origin = _startup_config.building_nav_origin
+except Exception:
+    _allowed_origin = "http://localhost:8001"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[_allowed_origin],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
+# REST API routes — registered before static files so /api/* is matched first
+# ---------------------------------------------------------------------------
+app.include_router(api_router)
 
 
 
