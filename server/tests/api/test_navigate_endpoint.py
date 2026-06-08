@@ -31,6 +31,28 @@ _FIXED_TURN_RESULT = NavigateTurnResult(
     language="en",
 )
 
+_CLARIFICATION_BODY = {
+    "text": "Clarify: The user wants to go to 'blue section', but no POIs match this query.",
+    "language": "en",
+    "session_id": str(uuid.uuid4()),
+    "building_context": {
+        "current_node_label": "Main Lobby",
+        "available_pois": ["Cafeteria", "Elevator Bank", "Conference Room A"],
+        "floor_name": "Ground Floor",
+        "poi_not_found": True,
+        "query": "blue section",
+    },
+}
+
+_CLARIFY_TURN_RESULT = NavigateTurnResult(
+    intent="clarify",
+    destination_query=None,
+    accessibility_flag=False,
+    response_text="I couldn't find 'blue section'. Did you mean Cafeteria or Elevator Bank?",
+    needs_clarification=True,
+    language="en",
+)
+
 
 class TestNavigateEndpoint:
 
@@ -158,3 +180,81 @@ class TestNavigateEndpoint:
             resp = client.post("/api/navigate", json=_VALID_BODY)
         assert resp.status_code == 200
         assert resp.json()["accessibility_flag"] is True
+
+    def test_poi_not_found_body_accepted_by_pydantic(self, client: TestClient) -> None:
+        """BuildingContext with poi_not_found + query fields must not return 422."""
+        with patch(
+            "server.api.navigate.run_clarification_turn",
+            new=AsyncMock(return_value=_CLARIFY_TURN_RESULT),
+        ):
+            resp = client.post("/api/navigate", json=_CLARIFICATION_BODY)
+        assert resp.status_code != 422, f"Got 422: {resp.json()}"
+        assert resp.status_code == 200
+
+    def test_poi_not_found_returns_clarify_intent(self, client: TestClient) -> None:
+        """poi_not_found=True → response.intent=='clarify' and destination_query is None."""
+        with patch(
+            "server.api.navigate.run_clarification_turn",
+            new=AsyncMock(return_value=_CLARIFY_TURN_RESULT),
+        ):
+            resp = client.post("/api/navigate", json=_CLARIFICATION_BODY)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["intent"] == "clarify"
+        assert data["destination_query"] is None
+        assert data["needs_clarification"] is True
+
+    def test_poi_not_found_skips_run_navigate_turn(self, client: TestClient) -> None:
+        """poi_not_found=True must call run_clarification_turn, NOT run_navigate_turn."""
+        with patch(
+            "server.api.navigate.run_clarification_turn",
+            new=AsyncMock(return_value=_CLARIFY_TURN_RESULT),
+        ) as mock_clarify, patch(
+            "server.api.navigate.run_navigate_turn",
+            new=AsyncMock(return_value=_FIXED_TURN_RESULT),
+        ) as mock_navigate:
+            resp = client.post("/api/navigate", json=_CLARIFICATION_BODY)
+        assert resp.status_code == 200
+        mock_clarify.assert_called_once()
+        mock_navigate.assert_not_called()
+
+    def test_poi_not_found_normal_path_still_calls_run_navigate_turn(
+        self, client: TestClient
+    ) -> None:
+        """poi_not_found=False (default) must NOT call run_clarification_turn."""
+        with patch(
+            "server.api.navigate.run_clarification_turn",
+            new=AsyncMock(return_value=_CLARIFY_TURN_RESULT),
+        ) as mock_clarify, patch(
+            "server.api.navigate.run_navigate_turn",
+            new=AsyncMock(return_value=_FIXED_TURN_RESULT),
+        ) as mock_navigate:
+            resp = client.post("/api/navigate", json=_VALID_BODY)
+        assert resp.status_code == 200
+        mock_navigate.assert_called_once()
+        mock_clarify.assert_not_called()
+
+    def test_poi_not_found_502_on_llm_error(self, client: TestClient) -> None:
+        """poi_not_found=True + LLMError from run_clarification_turn → HTTP 502."""
+        with patch(
+            "server.api.navigate.run_clarification_turn",
+            new=AsyncMock(side_effect=LLMError("stream failed")),
+        ):
+            resp = client.post("/api/navigate", json=_CLARIFICATION_BODY)
+        assert resp.status_code == 502
+        assert resp.json()["detail"]["error"] == "llm_failed"
+
+    def test_poi_not_found_session_history_updated(self, client: TestClient) -> None:
+        """Session history is updated even after a clarification turn."""
+        sid = str(uuid.uuid4())
+        body = {**_CLARIFICATION_BODY, "session_id": sid}
+        with patch(
+            "server.api.navigate.run_clarification_turn",
+            new=AsyncMock(return_value=_CLARIFY_TURN_RESULT),
+        ):
+            resp = client.post("/api/navigate", json=body)
+        assert resp.status_code == 200
+        session = client.app.state.navigate_sessions[sid]
+        assert len(session.history) == 2  # one user + one assistant message
+        assert session.history[0]["role"] == "user"
+        assert session.history[1]["role"] == "assistant"

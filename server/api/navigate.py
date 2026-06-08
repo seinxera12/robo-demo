@@ -79,6 +79,10 @@ class BuildingContext(BaseModel):
     current_node_label: str
     available_pois: list[str]
     floor_name: str
+    # Clarification variant — sent only on the second /api/navigate call
+    # when building-nav received 0 POI matches for the previous destination_query.
+    poi_not_found: bool = False   # True signals this is a clarification turn
+    query: str | None = None      # The failed query string (e.g. "blue section")
 
 
 class NavigateRequest(BaseModel):
@@ -220,6 +224,86 @@ async def run_navigate_turn(
     )
 
 
+async def run_clarification_turn(
+    original_query: str,
+    available_pois: list[str],
+    language: str,
+    session_history: list[dict],
+    building_context: dict,
+    prompt_assembler: Any,
+    llm_chain: Any,
+    post_processor: Any,
+) -> NavigateTurnResult:
+    """Execute a clarification LLM turn when building-nav found 0 POI matches.
+
+    Bypasses intent classification (Call 1) entirely — the intent is known to be
+    'clarify' because building-nav explicitly signals poi_not_found=True.
+    Forces destination_query=None so building-nav does not retry the POI search.
+
+    Args:
+        original_query:   The query string that produced 0 POI results.
+        available_pois:   Full POI name list injected into the LLM context.
+        language:         ISO 639-1 language code for the response.
+        session_history:  OpenAI-format message history for this session.
+        building_context: Full building_context dict from the request.
+        prompt_assembler: app.state.prompt_assembler
+        llm_chain:        app.state.llm_chain
+        post_processor:   app.state.post_processor
+
+    Returns:
+        NavigateTurnResult with intent='clarify' and destination_query=None.
+
+    Raises:
+        LLMError: If the LLM stream fails or yields no tokens.
+    """
+    from server.llm.intent import IntentResult
+
+    effective_lang = language if language not in ("", "unknown") else "en"
+
+    # Synthetic IntentResult — no LLM call needed for classification
+    synthetic_intent = IntentResult(
+        intent="clarify",
+        language=effective_lang,
+        confidence=1.0,
+        needs_clarification=True,
+        clarification_reason="poi_not_found",
+        query_clean=original_query,
+        destination_query=None,
+        accessibility_flag=False,
+    )
+
+    _, messages = prompt_assembler.assemble_prompt(
+        user_input=original_query,
+        intent_result=synthetic_intent,
+        session_history=session_history,
+        retrieved_context="",
+        route_type="clarify",
+        building_context=building_context,
+    )
+
+    try:
+        tokens: list[str] = []
+        async for token in llm_chain.stream(messages, max_tokens=120, temperature=0.5):
+            tokens.append(token)
+    except Exception as exc:
+        raise LLMError(str(exc)) from exc
+
+    if not tokens:
+        raise LLMError("LLM stream produced no tokens for clarification turn")
+
+    raw_response = "".join(tokens)
+    response_text = post_processor.clean(raw_response, effective_lang)
+
+    return NavigateTurnResult(
+        intent="clarify",
+        destination_query=None,    # must stay None — prevents POI search loop
+        accessibility_flag=False,
+        response_text=response_text,
+        needs_clarification=True,
+        language=effective_lang,
+    )
+
+
 # ---------------------------------------------------------------------------
 # HTTP endpoint
 # ---------------------------------------------------------------------------
@@ -254,30 +338,54 @@ async def navigate_endpoint(
     )
 
     # -- Run LLM turn ---------------------------------------------------------
-    try:
-        result = await run_navigate_turn(
-            text=body.text,
-            language=body.language,
-            session_history=list(session.history),
-            building_context=body.building_context.model_dump(),
-            intent_classifier=request.app.state.intent_classifier,
-            prompt_assembler=request.app.state.prompt_assembler,
-            llm_chain=request.app.state.llm_chain,
-            router_component=request.app.state.router,
-            post_processor=request.app.state.post_processor,
-        )
-    except ClassifyError as exc:
-        logger.debug("navigate_classify_failed  detail=%s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail={"error": "classify_failed", "detail": str(exc)},
-        )
-    except LLMError as exc:
-        logger.debug("navigate_llm_failed  detail=%s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail={"error": "llm_failed", "detail": str(exc)},
-        )
+    # -- Clarification short-circuit when building-nav signals poi_not_found --
+    # Bypasses Call 1 (intent classification) to prevent the infinite loop where
+    # the classifier re-extracts destination_query from the clarification text,
+    # causing building-nav to run another POI search that also returns 0 results.
+    if body.building_context.poi_not_found:
+        try:
+            result = await run_clarification_turn(
+                original_query=body.building_context.query or body.text,
+                available_pois=body.building_context.available_pois,
+                language=body.language,
+                session_history=list(session.history),
+                building_context=body.building_context.model_dump(),
+                prompt_assembler=request.app.state.prompt_assembler,
+                llm_chain=request.app.state.llm_chain,
+                post_processor=request.app.state.post_processor,
+            )
+        except LLMError as exc:
+            logger.debug("navigate_clarify_llm_failed  detail=%s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_failed", "detail": str(exc)},
+            )
+    else:
+        # -- Normal path: run full two-call LLM pipeline ----------------------
+        try:
+            result = await run_navigate_turn(
+                text=body.text,
+                language=body.language,
+                session_history=list(session.history),
+                building_context=body.building_context.model_dump(),
+                intent_classifier=request.app.state.intent_classifier,
+                prompt_assembler=request.app.state.prompt_assembler,
+                llm_chain=request.app.state.llm_chain,
+                router_component=request.app.state.router,
+                post_processor=request.app.state.post_processor,
+            )
+        except ClassifyError as exc:
+            logger.debug("navigate_classify_failed  detail=%s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "classify_failed", "detail": str(exc)},
+            )
+        except LLMError as exc:
+            logger.debug("navigate_llm_failed  detail=%s", exc)
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_failed", "detail": str(exc)},
+            )
 
     # -- Update session history -----------------------------------------------
     session.history.append({"role": "user", "content": body.text})

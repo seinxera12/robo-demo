@@ -15,6 +15,8 @@ import time
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
+from server.lang.detector import normalise_language
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -53,11 +55,12 @@ async def stt_endpoint(
         )
 
     latency_ms = int((time.monotonic() - t0) * 1000)
+    normalised_lang = normalise_language(result.language)
     # Log metadata only — never log transcribed text content (privacy/FR-017)
     logger.info(
         "stt  status=200  latency_ms=%d  language=%s",
         latency_ms,
-        result.language,
+        normalised_lang,
     )
 
-    return STTResponse(text=result.text, language=result.language)
+    return STTResponse(text=result.text, language=normalised_lang)

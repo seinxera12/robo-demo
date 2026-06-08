@@ -471,7 +471,7 @@ The existing WebSocket pipeline (`/ws`, `/ws/ui`) must remain fully functional t
     - Test: preflight from a disallowed origin does not return `Access-Control-Allow-Origin` for that origin
     - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 21. Final checkpoint — run the full test suite
+- [x] 21. Final checkpoint — run the full test suite
   - Ensure all tests pass, ask the user if questions arise.
 
 ---

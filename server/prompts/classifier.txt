@@ -11,7 +11,7 @@ Analyze the user's input and determine:
 4. **needs_clarification**: Whether the input is too ambiguous to process
 5. **clarification_reason**: Why clarification is needed (if applicable)
 6. **query_clean**: A clean, restated version of the user's intent
-7. **destination_query**: The extracted destination name or category (for navigation/accessibility intents only, otherwise null)
+7. **destination_query**: SHORT NOUN PHRASE (1-4 words) naming the destination. NOT a full sentence or clause — this value is used verbatim in a SQL LIKE search against a location database. GOOD: "cafeteria", "elevator bank", "conference room a", "main entrance". BAD: "I want to go to the cafeteria", "the elevator on the ground floor". Set to null if intent is not "navigation" or "accessibility_request".
 8. **accessibility_flag**: Whether the user expressed a mobility or accessibility constraint (wheelchair, elevator, stairs, etc.)
 
 ## Intent Categories

@@ -317,6 +317,14 @@ If asked something out of scope, respond with:
                 "## Search Results\n"
                 "{search_results_summary}"
             ),
+            "clarify": (
+                "# Task\n"
+                "The user asked for a location that does not exist in this building.\n"
+                "Apologise briefly in one sentence, then suggest 2-3 of the most relevant "
+                "destinations from the Available destinations list.\n"
+                "Do NOT suggest any location not in that list.\n"
+                "Keep the response to 2 sentences maximum."
+            ),
         }
         
         # Get the template for this route type, default to general

@@ -47,21 +47,33 @@ def test_output_domain_invariant(text: str) -> None:
 
 @given(
     kana=st.sampled_from(_HIRAGANA + _KATAKANA),
-    suffix=st.text(),
+    suffix=st.text(
+        alphabet=st.characters(
+            blacklist_characters="".join(
+                chr(c) for c in range(0xAC00, 0xD7A4)   # Hangul syllables
+            ) + "".join(
+                chr(c) for c in range(0x1100, 0x1200)    # Hangul Jamo
+            )
+        )
+    ),
 )
 @settings(max_examples=300)
 def test_japanese_detection_priority(kana: str, suffix: str) -> None:
     """Feature: building-nav-integration, Property 2: Japanese detection priority.
 
     For ANY string that contains at least one hiragana or katakana character,
-    detect_language_from_text() MUST return "ja" — even when CJK ideographs
-    are also present in the suffix.
+    and NO Hangul characters (which take higher priority), detect_language_from_text()
+    MUST return "ja" — even when CJK ideographs are also present in the suffix.
+
+    Note: the detection priority is KO > JA > ZH > EN. This property tests that
+    kana correctly beats ZH and EN, while explicitly excluding Hangul from the
+    suffix to avoid conflicting with the higher-priority KO rule.
     Validates: Requirements 4.2, 7.8
     """
     text = kana + suffix
     result = detect_language_from_text(text)
     assert result == "ja", (
-        f"Expected 'ja' for kana-containing text, got {result!r}. "
+        f"Expected 'ja' for kana-containing text (no Hangul), got {result!r}. "
         f"kana={kana!r}, suffix={suffix!r}"
     )
 
