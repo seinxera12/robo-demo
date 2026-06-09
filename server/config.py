@@ -120,7 +120,7 @@ class Config:
             vad_silence_ms=int(os.getenv("VAD_SILENCE_MS", "600")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             server_host=os.getenv("SERVER_HOST", "0.0.0.0"),
-            server_port=int(os.getenv("SERVER_PORT", "8001")),
+            server_port=int(os.getenv("SERVER_PORT", "8000")),
             ws_port=int(os.getenv("WS_PORT", "8000")),
             building_nav_origin=building_nav_origin,
         )

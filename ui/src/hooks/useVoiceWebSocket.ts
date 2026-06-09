@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const WS_URL = 'ws://localhost:8000/ws/ui';
+// Derive the WebSocket URL from the current page origin so the UI works
+// regardless of which port the server is running on (8000 standalone, 8001
+// building-nav integration, or any custom SERVER_PORT value).
+const WS_URL = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/ui`;
 const RECONNECT_DELAY_MS = 2000;
 
 interface Message {

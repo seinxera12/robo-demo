@@ -49,22 +49,27 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ^
     "  Write-Host '    logging\ folder created.';" ^
     "}" ^
     "Write-Host '';" ^
+    "$port = 8000;" ^
+    "if (Test-Path '.env') {" ^
+    "  $line = Get-Content '.env' | Where-Object { $_ -match '^SERVER_PORT\s*=' } | Select-Object -Last 1;" ^
+    "  if ($line -match '=\s*(\d+)') { $port = [int]$Matches[1] }" ^
+    "}" ^
     "try {" ^
     "  Write-Host '[*] Starting Lightweight Voice Demo...';" ^
     "  Write-Host '    Press Ctrl+C to stop all processes.';" ^
     "  Write-Host '';" ^
-    "  Write-Host '[*] Starting server on http://localhost:8000 ...';" ^
-    "  $serverProc = Start-Process -FilePath 'venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','server.main:app','--host','0.0.0.0','--port','8000' -PassThru -NoNewWindow;" ^
+    "  Write-Host \"[*] Starting server on http://localhost:$port ...\";" ^
+    "  $serverProc = Start-Process -FilePath 'venv\Scripts\python.exe' -ArgumentList '-m','uvicorn','server.main:app','--host','0.0.0.0',\"--port\",$port -PassThru -NoNewWindow;" ^
     "  Start-Sleep -Seconds 3;" ^
     "  Write-Host '[*] Starting audio client...';" ^
     "  $clientProc = Start-Process -FilePath 'venv\Scripts\python.exe' -ArgumentList '-m','client.main' -PassThru -NoNewWindow;" ^
     "  Start-Sleep -Seconds 1;" ^
-    "  Write-Host '[*] Opening browser at http://localhost:8000 ...';" ^
-    "  Start-Process 'http://localhost:8000';" ^
+    "  Write-Host \"[*] Opening browser at http://localhost:$port ...\";" ^
+    "  Start-Process \"http://localhost:$port\";" ^
     "  Write-Host '';" ^
     "  Write-Host '========================================================================';" ^
     "  Write-Host ' Lightweight Voice Demo is running.';" ^
-    "  Write-Host ' Browser UI : http://localhost:8000';" ^
+    "  Write-Host \" Browser UI : http://localhost:$port\";" ^
     "  Write-Host ' Press Ctrl+C to stop all processes.';" ^
     "  Write-Host '========================================================================';" ^
     "  Write-Host '';" ^

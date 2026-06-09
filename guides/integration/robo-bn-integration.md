@@ -1001,3 +1001,198 @@ All three are on Robo-BN. All three are called server-to-server. The browser nev
 | `frontend/vite.config.js` | `/chat` and `/tts` proxy entries |
 | `documentation/building-nav-architecture.md` | Full system architecture discovery report |
 | `.agent/.antigravity/.specs/day8-integration/plan.md` | Original integration architecture plan |
+
+
+---
+
+## 15. Recent Changes — Robo-BN Integration Patch (June 2026)
+
+This section documents the fixes applied after the initial integration audit. All changes are live on `main`.
+
+### What was fixed
+
+#### Audio format detection in STT (`server/stt/groq_stt.py`)
+
+The STT backend previously wrapped all incoming audio in a PCM16 → WAV container unconditionally. This silently broke transcription for `audio/webm` input (the format `MediaRecorder` produces in Chrome/Edge), because raw webm bytes cannot be frame-written as PCM16.
+
+The backend now inspects the first 4 bytes of the audio payload (magic-byte detection) and branches:
+
+| Detected format | Handling |
+|---|---|
+| `webm`, `ogg`, `wav`, `mp3`, `flac` | Passed directly to Groq as `audio.<ext>` — no re-encoding |
+| Unknown / raw PCM16 | Wrapped in a WAV container as before (WebSocket pipeline path) |
+
+No changes needed on the building-nav side. The `/api/stt` request format is unchanged.
+
+#### ISO 639-1 language code normalisation (`server/lang/detector.py`, `server/api/stt.py`)
+
+Groq Whisper can return either ISO 639-1 (`en`) or ISO 639-2 (`eng`) language codes depending on the model variant and audio content. The previous detector did not handle ISO 639-2, causing it to fall back silently to `"en"` for Japanese, Korean, and Chinese audio.
+
+A `normalise_language()` utility now maps all known variants before they leave the server:
+
+| Input | Output |
+|---|---|
+| `eng`, `en-us`, `en-gb`, `en-au`, `en-ca` | `en` |
+| `jpn`, `ja-jp` | `ja` |
+| `kor`, `ko-kr` | `ko` |
+| `zho`, `cmn`, `chi`, `zh-cn`, `zh-tw` | `zh` |
+| Any unrecognised code | `en` (default) |
+
+Normalisation is applied in two places: `LanguageDetector.detect()` and the `/api/stt` response constructor. The language field in all API responses is guaranteed to be one of `en`, `ja`, `ko`, `zh`.
+
+#### BuildingContext now accepts clarification fields (`server/api/navigate.py`)
+
+The `BuildingContext` Pydantic model previously had only three fields. The two clarification-variant fields sent by building-nav were silently dropped by Pydantic validation, so the LLM never received the signal that a clarification turn was needed.
+
+Two optional fields are now accepted:
+
+```json
+"building_context": {
+  "current_node_label": "Main Lobby",
+  "available_pois": [...],
+  "floor_name": "Ground Floor",
+  "poi_not_found": true,
+  "query": "blue section"
+}
+```
+
+Both fields default to `false` / `null` so all existing requests that omit them continue to work without change.
+
+#### Clarification short-circuit — infinite loop fix (`server/api/navigate.py`)
+
+When `poi_not_found: true` arrives, the previous code passed the clarification text directly through the intent classifier (Call 1). The classifier would extract `destination_query="blue section"` again, causing building-nav to repeat the same 0-result POI search indefinitely.
+
+The endpoint now short-circuits Call 1 entirely when `poi_not_found` is true, calling a dedicated `run_clarification_turn()` function instead. This function:
+
+- Constructs a synthetic `IntentResult` with `intent="clarify"` and `destination_query=None`
+- Calls the LLM (Call 2) with `route_type="clarify"` — a new prompt template that instructs the model to apologise and suggest alternatives from `available_pois`
+- Returns `destination_query=None` unconditionally, preventing building-nav from re-running the POI search
+
+The normal path (`poi_not_found=false`) is completely unchanged.
+
+#### Classifier prompt noun-phrase constraint (`server/prompts/classifier.txt`)
+
+The `destination_query` field description in the intent classifier prompt now explicitly states that the value must be a short noun phrase of 1–4 words and will be used verbatim in a SQL LIKE search. Full-sentence extractions are explicitly prohibited with good/bad examples.
+
+#### Port and CORS defaults (`.env`, `.env.example`, `server/config.py`)
+
+`SERVER_PORT` now defaults to `8001` in both the `.env.example` template and the `Config.from_env()` fallback, matching building-nav's default `ROBO_BN_URL=http://localhost:8001`. `BUILDING_NAV_ORIGIN` is pre-populated to `http://localhost:8001` in both env files so the startup warning no longer fires in a default dev setup.
+
+---
+
+## 16. Starting and Verifying the Services
+
+### Prerequisites
+
+- Python venv activated (or use `venv/Scripts/python.exe` directly)
+- `.env` file present with `GROQ_API_KEY` set
+- Kokoro TTS model files under `models/kokoro/`
+
+### Start — standalone voice demo (normal use)
+
+Double-click `start.bat` or run it from a terminal. It reads `SERVER_PORT` from `.env` (default `8000`) and opens the browser automatically at that port.
+
+```
+[*] Starting server on http://localhost:8000 ...
+[*] Starting audio client...
+[*] Opening browser at http://localhost:8000 ...
+```
+
+### Start — as a building-nav integration target
+
+When running alongside building-nav (which calls `ROBO_BN_URL=http://localhost:8001`), set `SERVER_PORT=8001` in `.env` and start the server manually:
+
+```bash
+# .env: SERVER_PORT=8001
+venv/Scripts/python.exe -m uvicorn server.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+`start.bat` also honours this — it reads `SERVER_PORT` from `.env` each time it runs, so changing the value there is enough.
+
+Expected startup output (either mode):
+```
+INFO  uvicorn  — Application startup complete.
+INFO  uvicorn  — Uvicorn running on http://0.0.0.0:<port>
+```
+
+If `BUILDING_NAV_ORIGIN` is unset you will see a WARNING at startup — set it in `.env` to silence it.
+
+### Run the test suite
+
+```bash
+# API tests only (fast, no network, no models needed)
+venv/Scripts/python.exe -m pytest server/tests/api/ -v
+
+# Expected: 82 passed
+```
+
+### Smoke-test the three endpoints
+
+```bash
+# Health check
+curl http://localhost:8001/api/health
+
+# STT — webm magic bytes (simulates MediaRecorder output)
+python -c "
+import requests, struct
+webm = b'\x1a\x45\xdf\xa3' + b'\x00' * 20
+r = requests.post('http://localhost:8001/api/stt',
+    files={'file': ('audio.webm', webm, 'audio/webm')})
+print(r.status_code, r.json())
+"
+
+# Navigate — normal turn
+curl -s -X POST http://localhost:8001/api/navigate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "find the cafeteria",
+    "language": "en",
+    "session_id": "smoke-test-001",
+    "building_context": {
+      "current_node_label": "Main Lobby",
+      "available_pois": ["Cafeteria", "Elevator Bank", "Conference Room A"],
+      "floor_name": "Ground Floor"
+    }
+  }' | python -m json.tool
+
+# Navigate — clarification turn (poi_not_found path)
+curl -s -X POST http://localhost:8001/api/navigate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Clarify: The user wants the blue section but no POIs match.",
+    "language": "en",
+    "session_id": "smoke-test-001",
+    "building_context": {
+      "current_node_label": "Main Lobby",
+      "available_pois": ["Cafeteria", "Elevator Bank", "Conference Room A"],
+      "floor_name": "Ground Floor",
+      "poi_not_found": true,
+      "query": "blue section"
+    }
+  }' | python -m json.tool
+# Expect: intent="clarify", destination_query=null
+
+# TTS — English
+curl -s -X POST http://localhost:8001/api/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Turn left at the elevator bank", "language": "en"}' \
+  --output /tmp/test.wav && file /tmp/test.wav
+# Expect: RIFF (little-endian) data, WAVE audio
+
+# TTS — Korean (must return 406)
+curl -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8001/api/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "좌회전", "language": "ko"}'
+# Expect: 406
+```
+
+### Key things to verify after startup
+
+| Check | What to look for |
+|---|---|
+| Port is 8001 | `uvicorn` log line shows `0.0.0.0:8001` |
+| No CORS warning | `BUILDING_NAV_ORIGIN` INFO line appears, not a WARNING |
+| STT accepts webm | Smoke test above returns 200 (even with garbage webm bytes, the endpoint validates and calls the backend) |
+| Language normalisation | `/api/stt` with mock returning `language="eng"` responds `"language": "en"` |
+| Clarification path | `/api/navigate` with `poi_not_found=true` responds with `intent="clarify"` and `destination_query=null` |
+| Test suite green | `82 passed` with no failures or errors |
